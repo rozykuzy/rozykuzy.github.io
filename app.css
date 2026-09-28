@@ -14,11 +14,11 @@
   --topH:56px; --stripH:30px; --barH:0px;
   --X:max(var(--gut),calc((100% - var(--maxw))/2));
 }
-html[data-room="home"],html[data-room="hl"],.room.r-hl,.dv[data-room="hl"],.p-hl{
+html[data-room="home"],html[data-room="hl"],.room.r-hl,.dv[data-room="hl"]{
   --bg:#fbfaf8; --bgA:rgba(251,250,248,.88); --ink:#181715; --mid:#605c55; --soft:#726d64; --line:#928c85;
   --hair:#e6e2db; --hair2:#f0ece6; --tint:#f1efe9; --stripBg:#181715; --stripFg:#fbfaf8; --shade:rgba(24,23,21,.38);
 }
-html[data-room="ccp"],.room.r-ccp,.dv[data-room="ccp"],.p-ccp{
+html[data-room="ccp"],.room.r-ccp,.dv[data-room="ccp"]{
   --bg:#121110; --bgA:rgba(18,17,16,.74); --ink:#ece8e1; --mid:#b5afa5; --soft:#8f897f; --line:#6a655d;
   --hair:#2b2926; --hair2:#1e1c1a; --tint:#1a1817; --stripBg:#1e1c1a; --stripFg:#b5afa5; --shade:rgba(0,0,0,.55);
 }
@@ -309,10 +309,13 @@ html[data-room="ccp"] .strip{border-bottom:1px solid var(--hair)}
   opacity:0;transform:translateY(28px);transition:transform .3s var(--ease),opacity .22s}
 .ov.open .dv{opacity:1;transform:none}
 .dv-top{flex:none;height:56px;display:flex;align-items:center;gap:14px;padding:0 6px 0 var(--gut);border-bottom:1px solid var(--hair)}
-.dv-tag{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--mid);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dv-pos{margin-left:auto;font:400 11px/1 var(--mono);color:var(--soft);white-space:nowrap}
-.dv-nav{display:flex;align-items:center}
-.dv-x{height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;font-size:12.5px}
+.dv-tag{flex:1 1 auto;display:block;font-size:12px;color:var(--mid);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dv-tag .no{margin-right:8px}
+.dv-tag .nm-s{display:none}
+@media(max-width:599px){ .dv-tag .nm-l{display:none} .dv-tag .nm-s{display:inline} }
+.dv-pos{flex:none;margin-left:auto;font:400 11px/1 var(--mono);color:var(--soft);white-space:nowrap}
+.dv-nav{flex:none;display:flex;align-items:center}
+.dv-x{flex:none;height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;font-size:12.5px;white-space:nowrap}
 .dv-body{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
 .dv-pic{position:relative;background:var(--tint)}
 .dv-pic.dead{aspect-ratio:4/5;max-height:60vh}

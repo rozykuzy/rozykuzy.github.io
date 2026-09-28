@@ -318,6 +318,11 @@ function title(){
   else t='Archive Index — Helmut Lang · Carol Christian Poell';
   if(DV.it) t=clip(DV.it.t,60)+' — '+ARCH[DV.it.__a].name;
   doc.title=t;
+  // one canonical address per view (filters and the open listing are not separate pages)
+  var c=doc.querySelector('link[rel="canonical"]'), q=ST.view==='room'?'?archive='+ST.a:ST.view==='about'?'?view=about':ST.view==='saved'?'?view=saved':'';
+  if(c) c.setAttribute('href','https://rozykuzy.github.io/'+q);
+  var md0=doc.querySelector('meta[name="description"]'), d=ST.view==='room'?DATA[ST.a]:null;
+  if(md0 && ST.view==='room') md0.setAttribute('content',ARCH[ST.a].name+' '+ARCH[ST.a].span+' 중고 매물'+(d?' '+won(d.__cards)+'건':'')+' · 매일 갱신 · 판매자 통화와 원화 환산가');
 }
 function navUi(){
   var cur=ST.view==='room'?ST.a:ST.view;
@@ -424,7 +429,7 @@ function homeShell(){
   '</section>'+
   '<section class="today" id="today" aria-labelledby="todayH">'+
     '<div class="sh"><h2 id="todayH">오늘 들어온 매물</h2><span class="sh-d" id="todayD"></span><span class="sh-l" id="todayL"></span></div>'+
-    '<div class="grid g-today" id="tgrid">'+skel(6)+'</div>'+
+    '<div class="grid" id="tgrid">'+skel(6)+'</div>'+
   '</section>';
 }
 function mosaic(a,d){
@@ -698,7 +703,7 @@ function roomUpdate(gen){
   seen(a);
   LASTQ=filterKey();
   var d=DATA[a], p=P[a], F=ST.F;
-  compute(a);
+  compute(a); title();
   // head
   var tn=d.__tn, cl=p.CERT, st=function(l,n,x){ return '<span class="st">'+l+' <b>'+won(n)+'</b>'+(x||'')+'</span>' };
   var bits=[st('매물',d.__cards,d.__live!==d.__cards?'<span class="basis">판매처 기준 '+won(d.__live)+'</span>':''), st(esc(cl.A),tn.A), st(esc(cl.B),tn.B), st(esc(cl.C),tn.C)];
@@ -1031,7 +1036,7 @@ function detailHtml(it){
   var tags=it.__m.map(function(k){ return '<button type="button" class="tag" data-motif="'+esc(k)+'">'+esc(p.motifLbl(k))+'</button>' }).join('');
   var thumbs=ph.length>1?'<div class="ths" role="group" aria-label="사진">'+ph.map(function(u,i){ return '<button type="button" data-ph="'+i+'" aria-label="사진 '+(i+1)+'"'+(i===0?' aria-current="true"':'')+'>'+imgTag(a,u,160)+'</button>' }).join('')+'</div>':'';
   return '<div class="dv-top">'+
-      '<span class="dv-tag"><span class="no">'+A.no+'</span>'+esc(A.name)+'</span>'+
+      '<span class="dv-tag"><span class="no">'+A.no+'</span><span class="nm-l">'+esc(A.name)+'</span><span class="nm-s">'+esc(A.short)+'</span></span>'+
       '<span class="dv-pos" aria-live="polite">'+pos+'</span>'+
       '<span class="dv-nav">'+
         '<button type="button" class="ico" data-step="-1" aria-label="이전 매물"'+(DV.idx>0?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5 8 12l7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
