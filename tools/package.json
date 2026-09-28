@@ -1,0 +1,17 @@
+{
+  "name": "archive-index-tools",
+  "private": true,
+  "description": "engine.js 다시 만들기와 브라우저 검증 도구",
+  "scripts": {
+    "engine": "node extract.mjs ../fixtures/helmut-lang/template.html ../fixtures/ccp/template.html ../engine.js",
+    "serve": "node serve.mjs",
+    "test": "node suite.cjs && node a11y.cjs"
+  },
+  "devDependencies": {
+    "acorn": "^8.18.0",
+    "acorn-walk": "^8.3.4",
+    "axe-core": "^4.13.0",
+    "@fontsource/inter": "^5.0.0",
+    "@fontsource/ibm-plex-mono": "^5.0.0"
+  }
+}

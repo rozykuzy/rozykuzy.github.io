@@ -1,0 +1,15 @@
+{
+  "name": "Archive Index",
+  "short_name": "Archive Index",
+  "description": "Helmut Lang 1986–2005 · Carol Christian Poell 중고 매물 색인",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#fbfaf8",
+  "theme_color": "#fbfaf8",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
