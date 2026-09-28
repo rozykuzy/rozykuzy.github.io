@@ -11,23 +11,29 @@ const csp = (p) => p.evaluate(() => window.__csp || []);
   { console.log('home'); const p = await H.page(b, { width: 1440, height: 900 });
     await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 1600);
     const r = await p.evaluate(() => ({ fx: document.documentElement.classList.contains('fx'), rooms: [...document.querySelectorAll('.room')].map((e) => e.classList.contains('in')),
-      words: document.querySelectorAll('.room-name .wd').length, name: document.querySelector('.r-ccp .room-name').textContent,
+      words: document.querySelectorAll('.room-name .wd').length, name: [...document.querySelectorAll('.r-ccp .room-name .wd')].map((w) => w.textContent).join(''),
+      tiles: document.querySelectorAll('#col .tile').length, colIn: document.getElementById('col').classList.contains('in'),
       band: !document.getElementById('band').hidden, groups: document.querySelectorAll('#mq .mq-g').length, dup: document.querySelectorAll('#mq .mq-g[aria-hidden="true"]').length,
       srcs: document.querySelectorAll('#mq .mq-g:first-child .mq-s').length, run: document.getElementById('mq').classList.contains('run'),
       ticks: [...document.querySelectorAll('.room-stat [data-n]')].every((e) => e.textContent === (+e.dataset.n).toLocaleString('ko-KR')) }));
     ok(r.fx, 'html.fx on with motion allowed');
     ok(r.rooms.every(Boolean), 'both rooms arrived ' + r.rooms);
-    ok(r.words === 5 && r.name.toUpperCase() === 'CAROLCHRISTIANPOELL', 'room names in words ' + r.words + ' ' + r.name);
+    ok(r.words === 5 && r.name === 'CarolChristianPoell', 'room names in words ' + r.words + ' ' + r.name);
+    ok(r.tiles === 14 && r.colIn, 'photographs around the names ' + r.tiles + ' ' + r.colIn);
     ok(r.band && r.groups === 2 && r.dup === 1 && r.srcs > 10 && r.run, 'source band ' + JSON.stringify(r));
     ok(r.ticks, 'counts end on the exact numbers');
-    // spotlight follows the pointer
-    await p.mouse.move(300, 400); await wait(p, 120);
-    const mx = await p.evaluate(() => getComputedStyle(document.querySelector('.r-hl')).getPropertyValue('--mx'));
-    ok(/^\d+(\.\d+)?px$/.test(mx.trim()), 'spotlight follows the pointer ' + mx);
+    // one name in focus: the other steps back, the page turns to its sheet, the other archive's photographs fade
+    const nb = await (await p.$('.r-ccp .room-name')).boundingBox();
+    await p.mouse.move(nb.x + nb.width / 2, nb.y + nb.height / 2); await wait(p, 900);
+    const fo = await p.evaluate(() => { const h = document.getElementById('hero'); const t = document.querySelector('.tile[data-a="hl"] .ph');
+      return { f: h.getAttribute('data-focus'), bg: getComputedStyle(h).backgroundColor, hl: +getComputedStyle(document.querySelector('.room.r-hl')).opacity, t: t ? +getComputedStyle(t).opacity : -1 } });
+    ok(fo.f === 'ccp' && fo.bg === 'rgb(14, 13, 12)' && fo.hl < .5 && fo.t < .5, 'focus on one archive ' + JSON.stringify(fo));
+    await p.mouse.move(8, 880); await wait(p, 900);
+    ok(await p.evaluate(() => !document.getElementById('hero').hasAttribute('data-focus')), 'focus clears off the names');
     // today's cards arrive as they scroll in
     const before = await p.evaluate(() => [...document.querySelectorAll('#tgrid .card')].filter((c) => c.classList.contains('rv') && !c.classList.contains('in')).length);
     await p.evaluate(() => window.scrollTo(0, document.getElementById('today').offsetTop - 100)); await wait(p, 1200);
-    const after = await p.evaluate(() => [...document.querySelectorAll('#tgrid .card')].filter((c) => c.getBoundingClientRect().top < innerHeight && !c.classList.contains('in')).length);
+    const after = await p.evaluate(() => [...document.querySelectorAll('#tgrid .card')].filter((c) => { const r = c.getBoundingClientRect(); return r.top < innerHeight && r.left < innerWidth && r.right > 0 && !c.classList.contains('in') }).length);
     ok(before > 0 && after === 0, 'today cards arrive when seen ' + before + ' → ' + after + ' still hidden in view');
     await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await wait(p, 1500);
     ok(await p.evaluate(() => document.getElementById('footBig').classList.contains('in')), 'foot wordmark arrives');

@@ -57,12 +57,9 @@ function tick(box){
     if(k<1) requestAnimationFrame(go) };
   if(bs.length){ for(var i=0;i<bs.length;i++) bs[i].textContent='0'; requestAnimationFrame(go) }
 }
-// the pointer's place, for the room wipe and the spotlight
+// the pointer's place, for the room wipe
 var LASTPT=null;
 doc.addEventListener('pointerdown',function(e){ LASTPT={x:e.clientX, y:e.clientY, t:Date.now()} },{passive:true,capture:true});
-function spot(e){ var r=e.target.closest && e.target.closest('.room'); if(!r || FX.raf) return; var x=e.clientX, y=e.clientY;
-  FX.raf=requestAnimationFrame(function(){ FX.raf=0; var b=r.getBoundingClientRect(); r.style.setProperty('--mx',(x-b.left)+'px'); r.style.setProperty('--my',(y-b.top)+'px') }) }
-if(mq('(hover:hover)').matches) doc.addEventListener('pointermove',spot,{passive:true});
 // how far down the list: on a room, through the results; elsewhere, through the page
 var PROG=0;
 function prog(){ PROG=0; var top=$('top'); if(!top) return;
@@ -472,12 +469,32 @@ function card(it,o){
     '<div class="ph" data-open="'+k+'">'+imgTag(a,ph[0],600,{eager:o.eager})+'</div>'+
     '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="저장 · '+esc(clip(it.t,40))+'"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4.2-5.5 4.2z"/></svg></i></button>'+
     '<div class="cap">'+
-      '<div class="fl">'+(o.tag?'<span class="at">'+A.no+' '+esc(A.short)+'</span>':'')+p.flagsHtml(it)+'</div>'+
+      '<div class="fl">'+(o.tag?'<span class="at">'+(A.short==='CCP'?'CCP':'HL')+'</span>':'')+p.flagsHtml(it)+'</div>'+
       '<h3 class="t"><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
       p.priceHtml(it,false)+
       (ch?'<div class="chg">'+(ch.gone?'목록에서 사라짐':'저장 뒤 내림 '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
       '<div class="sub">'+subLine(it)+'</div>'+
     '</div></article>';
+}
+// one line of the index: number, photo, year as written, title, size, source, price
+function yearText(it){ return it.__e || (it.__yc && it.__yc.k!=='arch' ? it.__yc.v : '') || '' }
+function row(it,i,o){
+  o=o||{}; var a=it.__a, p=P[a], k=it.__k, on=isSaved(it), ph=p.photosOf(it)[0], y=yearText(it);
+  var price='₩'+won(it.k), cut=it.w>it.k?Math.round((it.w-it.k)/it.w*100):0;
+  var pr='<span class="r-p">'+(cut?'<s>₩'+won(it.w)+'</s>':'')+esc(price)+(cut?'<em>−'+cut+'%</em>':'')+'</span>';
+  return '<article class="row'+(it.x?' gone':'')+'" data-a="'+a+'" data-k="'+k+'">'+
+    '<span class="r-no">'+String(i+1).padStart(3,'0')+'</span>'+
+    '<span class="ph r-ph" data-open="'+k+'">'+imgTag(a,ph,160)+'</span>'+
+    '<h3 class="r-t"><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
+    '<span class="r-m">'+
+      '<span class="r-y'+(y?'':' s')+'">'+(y?esc(y):'연도 미상')+'</span>'+
+      (it.z?'<span class="r-z">'+esc(it.z)+'</span>':'')+
+      '<span class="r-s">'+(o.tag?esc(ARCH[a].short==='CCP'?'CCP':'HL')+' · ':'')+esc(it.r)+'</span>'+
+      pr+
+    '</span>'+
+    pr+
+    '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="저장 · '+esc(clip(it.t,40))+'"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4.2-5.5 4.2z"/></svg></i></button>'+
+  '</article>';
 }
 function skel(n){ var h=''; for(var i=0;i<n;i++) h+='<div class="card sk"><div class="ph"></div><div class="cap"><i></i><i></i><i></i></div></div>'; return h }
 function errBox(a){
@@ -487,49 +504,81 @@ function errBox(a){
 function toast(t){ var el=$('toast'); if(!el) return; el.textContent=t; el.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(function(){ el.classList.remove('on') },1800) }
 
 /* ---------------------------------------------------------------- home */
+// the front page is the index itself: the two archives by name, with photographs from both around them
 function homeShell(){
   return '<h1 class="sr" id="vh" tabindex="-1">Archive Index</h1>'+
-  '<section class="rooms" aria-label="아카이브">'+AS.map(function(a){ var A=ARCH[a];
-    return '<a class="room r-'+a+(FX.homeN>1?' in':'')+'" href="/?archive='+a+'">'+
-      '<span class="room-top"><span class="no">'+A.no+'</span><span class="sp">'+esc(A.span)+'</span></span>'+
-      '<span class="room-name">'+words(A.name,false)+'</span>'+
-      '<span class="room-foot">'+
-        '<span class="room-stat" id="st-'+a+'"><span class="sk w60"></span></span>'+
-        '<span class="room-mos" id="mo-'+a+'" aria-hidden="true"><i></i><i></i><i></i><i></i></span>'+
-        '<span class="btn room-go">들어가기<span class="arr" aria-hidden="true">→</span></span>'+
-      '</span></a>' }).join('')+
+  '<section class="hero" id="hero">'+
+    '<div class="col" id="col" aria-hidden="true"></div>'+
+    '<nav class="rooms" aria-label="두 아카이브">'+AS.map(function(a){ var A=ARCH[a];
+      return '<a class="room r-'+a+(FX.homeN>1?' in':'')+'" href="/?archive='+a+'" data-focus="'+a+'">'+
+        '<span class="room-no">'+A.no+'</span>'+
+        '<span class="room-name">'+words(A.name)+'<span class="room-go" aria-hidden="true">→</span></span>'+
+        '<span class="room-meta"><span class="room-sp">'+esc(A.span)+'</span><span class="room-stat" id="st-'+a+'"><span class="sk w60"></span></span></span>'+
+      '</a>' }).join('')+
+    '</nav>'+
+    '<p class="hero-d" id="heroD" aria-hidden="true"></p>'+
   '</section>'+
-  '<section class="band" id="band" aria-label="판매처" hidden><div class="mq" id="mq"></div></section>'+
   '<section class="today" id="today" aria-labelledby="todayH">'+
-    '<div class="sh"><h2 id="todayH">오늘 들어온 매물</h2><span class="sh-d" id="todayD"></span><span class="sh-l" id="todayL"></span></div>'+
-    '<div class="grid" id="tgrid">'+skel(6)+'</div>'+
-  '</section>';
+    '<div class="sh"><h2 id="todayH">오늘 들어온 매물</h2><span class="sh-d" id="todayD"></span><span class="sh-l" id="todayL"></span>'+
+      '<span class="sh-nav"><button type="button" class="arw" data-shelf="-1" aria-label="앞으로" disabled><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></button>'+
+      '<button type="button" class="arw" data-shelf="1" aria-label="뒤로"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></button></span></div>'+
+    '<div class="grid shelf" id="tgrid">'+skel(6)+'</div>'+
+  '</section>'+
+  '<section class="drops" id="drops" aria-labelledby="dropsH" hidden>'+
+    '<div class="sh"><h2 id="dropsH">가격 내림</h2><span class="sh-l" id="dropsL"></span></div>'+
+    '<div class="ix" id="dlist"></div>'+
+  '</section>'+
+  '<section class="band" id="band" aria-label="판매처" hidden><div class="mq" id="mq"></div></section>';
 }
-function mosaic(a,d){
-  var p=P[a], pool=d.items.filter(function(it){ return !it.x && !it.so && it.i });
-  pool.sort(cmpNew);
-  var pick=[], seen={};
-  for(var i=0;i<pool.length && pick.length<4;i++){ var u=pool[i].i; if(seen[u]) continue; seen[u]=1; pick.push(pool[i]) }
-  return pick.map(function(it){ return '<i>'+imgTag(a,it.i,300)+'</i>' }).join('')+(pick.length<4?new Array(5-pick.length).join('<i></i>'):'');
+// the same photographs all day: a fixed shuffle of the listings with a photo, seeded by the day
+function seeded(str){ var h=2166136261>>>0; for(var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0 }
+  return function(){ h^=h<<13; h>>>=0; h^=h>>>17; h^=h<<5; h>>>=0; return h/4294967296 } }
+function picks(a,d,n){
+  var pool=d.items.filter(function(it){ return it.i && !it.x && !it.so && !it.__bad });
+  var dated=pool.filter(function(it){ return it.__c==='A' || it.__c==='B' });
+  if(dated.length>=n*3) pool=dated;
+  var r=seeded(a+(d.today||'')), out=[], seenU={};
+  pool=pool.slice(); for(var i=pool.length-1;i>0;i--){ var j=Math.floor(r()*(i+1)), t=pool[i]; pool[i]=pool[j]; pool[j]=t }
+  for(var k=0;k<pool.length && out.length<n;k++){ var u=pool[k].i; if(seenU[u]) continue; seenU[u]=1; out.push(pool[k]) }
+  return out;
+}
+var TILELIST=[];
+function collage(gen){
+  if(gen!==GEN) return;
+  var el=$('col'); if(!el) return;
+  var done=AS.every(function(a){ return DATA[a] || FAIL[a] }); if(!done) return;
+  var per={}; AS.forEach(function(a){ per[a]=DATA[a]?picks(a,DATA[a],7):[] });
+  var out=[]; for(var i=0;i<7;i++) AS.forEach(function(a){ if(per[a][i]) out.push(per[a][i]) });
+  TILELIST=out;
+  el.innerHTML=out.map(function(it){ var a=it.__a, p=P[a];
+    var cap=[it.__e||(it.__yc&&it.__yc.k!=='arch'?it.__yc.v:''), it.r].filter(Boolean).join(' · ');
+    return '<span class="tile" data-a="'+a+'" data-k="'+it.__k+'" data-open="'+it.__k+'"><span class="ph">'+imgTag(a,it.i,400)+'</span>'+
+      (cap?'<span class="cp">'+esc(cap)+'</span>':'')+'</span>' }).join('');
+  bindImgs(el);
+  if(fxOn()) nextFrame(function(){ el.classList.add('in') }); else el.classList.add('in');
 }
 function statHtml(a,d){
   var s=[['매물',d.__cards]];
   if(!d.__allnew) s.push(['신규',d.__fresh]);
-  s.push(['연도 표기',d.__tn.A]);
   if(d.__sold) s.push(['판매 기록',d.__sold]);
-  return s.map(function(x){ return '<span><em>'+x[0]+'</em><b class="tick" data-n="'+x[1]+'">'+won(x[1])+'</b></span>' }).join('')+
-    '<span class="upd">'+esc(kst(d.built))+'</span>';
+  return s.map(function(x){ return '<span><em>'+x[0]+'</em><b class="tick" data-n="'+x[1]+'">'+won(x[1])+'</b></span>' }).join('');
+}
+function heroDate(){
+  var el=$('heroD'); if(!el) return;
+  var bits=AS.filter(function(a){ return DATA[a] && DATA[a].built }).map(function(a){
+    var t=kst(DATA[a].built).replace(/(\d{1,2})월\s*(\d{1,2})일\s*/,'$1/$2 ');
+    return esc(ARCH[a].short==='CCP'?'CCP':'HL')+' '+esc(t) });
+  el.innerHTML=bits.length?'<span>갱신 '+bits.join(' · ')+'</span>':'';
 }
 function homeUpdate(gen){
   AS.forEach(function(a){
     var paint=function(){ if(gen!==GEN) return; var d=DATA[a]; seen(a);
-      var st=$('st-'+a), mo=$('mo-'+a);
+      var st=$('st-'+a);
       if(st){ st.innerHTML=statHtml(a,d); if(FX.homeN===1 && !st.__t){ st.__t=1; tick(st) } }
-      if(mo){ mo.innerHTML=mosaic(a,d); bindImgs(mo) }
-      todayUpdate(gen); strip(); band(gen);
+      collage(gen); todayUpdate(gen); dropsUpdate(gen); strip(); band(gen); heroDate();
     };
     if(DATA[a]) paint();
-    else load(a).then(paint,function(){ if(gen!==GEN) return; var st=$('st-'+a); if(st) st.innerHTML='<span class="bad">불러오지 못함</span>'; todayUpdate(gen) });
+    else load(a).then(paint,function(){ if(gen!==GEN) return; var st=$('st-'+a); if(st) st.innerHTML='<span class="bad">불러오지 못함</span>'; collage(gen); todayUpdate(gen); dropsUpdate(gen) });
   });
 }
 // every source, live listings per source, for both archives — one slow line
@@ -559,18 +608,46 @@ function todayUpdate(gen){
   AS.forEach(function(a){ var d=DATA[a]; if(!d){ per[a]=[]; total[a]=0; return }
     var l=d.items.filter(function(it){ return it.n && !it.x && !it.so && !d.__allnew });
     l.sort(cmpNew); per[a]=l; total[a]=l.length });
-  var want={hl:8, ccp:4}, out=[];
+  var want={hl:10, ccp:6}, out=[];
   AS.forEach(function(a){ out=out.concat(per[a].slice(0,want[a])) });
-  AS.forEach(function(a){ if(out.length<12) out=out.concat(per[a].slice(want[a], want[a]+(12-out.length))) });
+  AS.forEach(function(a){ if(out.length<16) out=out.concat(per[a].slice(want[a], want[a]+(16-out.length))) });
   TODAYLIST=out;
   var d0=DATA.hl||DATA.ccp;
   $('todayD').textContent=d0?kday(d0.today):'';
-  $('todayL').innerHTML=AS.map(function(a){ return DATA[a]?'<a href="/?archive='+a+'&amp;show=new">'+esc(ARCH[a].name)+' <b>'+won(total[a])+'</b></a>':'' }).join('');
+  $('todayL').innerHTML=AS.map(function(a){ return DATA[a]&&total[a]?'<a href="/?archive='+a+'&amp;show=new">'+esc(ARCH[a].name)+' <b>'+won(total[a])+'</b></a>':'' }).join('');
   var bad=AS.filter(function(a){ return FAIL[a] }).map(function(a){ return esc(ARCH[a].name)+' 불러오지 못함' });
-  if(!out.length){ g.classList.add('none'); g.innerHTML='<p class="none-t">'+(bad.length?bad.join(' · '):'오늘 들어온 매물 없음')+'</p>'; return }
-  g.classList.remove('none');
-  g.innerHTML=out.map(function(it,i){ return card(it,{tag:true, eager:i<2}) }).join('');
+  var nav=doc.querySelector('#today .sh-nav');
+  if(!out.length){ g.classList.add('none'); if(nav) nav.hidden=true; g.innerHTML='<p class="none-t">'+(bad.length?bad.join(' · '):'오늘 들어온 매물 없음')+'</p>'; return }
+  g.classList.remove('none'); if(nav) nav.hidden=false;
+  g.innerHTML=out.map(function(it,i){ return card(it,{tag:true, eager:i<3}) }).join('');
   bindImgs(g); if(FX.homeN===1) reveal(g);
+  g.scrollLeft=0; shelfNav();
+  if(!g.__b){ g.__b=1; g.addEventListener('scroll',function(){ if(!g.__r) g.__r=requestAnimationFrame(function(){ g.__r=0; shelfNav() }) },{passive:true}) }
+}
+function shelfNav(){
+  var g=$('tgrid'); if(!g) return; var bs=doc.querySelectorAll('[data-shelf]');
+  for(var i=0;i<bs.length;i++){ var d=+bs[i].getAttribute('data-shelf');
+    bs[i].disabled = d<0 ? g.scrollLeft<=4 : g.scrollLeft+g.clientWidth>=g.scrollWidth-4 }
+}
+// price cuts, newest first: the archive's own record of what a seller lowered
+var DROPLIST=[];
+function cutDay(it){ var h=it.h; return Array.isArray(h)&&h.length&&h[h.length-1] ? String(h[h.length-1][0]||'') : '' }
+function dropsUpdate(gen){
+  if(gen!==GEN) return;
+  var box=$('drops'), l=$('dlist'); if(!box || !l) return;
+  var done=AS.every(function(a){ return DATA[a] || FAIL[a] }); if(!done) return;
+  var all=[], per={};
+  AS.forEach(function(a){ var d=DATA[a]; per[a]=0; if(!d) return;
+    d.items.forEach(function(it){ if(!it.x && !it.so && !it.__bad && it.w>it.k && it.k>0){ all.push(it); per[a]++ } }) });
+  if(!all.length){ box.hidden=true; DROPLIST=[]; return }
+  // the front page shows the cuts on pieces the archive can date, and not the small change
+  var shown=all.filter(function(it){ return (it.__c==='A' || it.__c==='B') && it.k>=100000 });
+  if(shown.length<8) shown=all;
+  shown.sort(function(x,y){ var dx=cutDay(x), dy=cutDay(y); if(dx!==dy) return dy>dx?1:-1; return (y.w-y.k)/y.w-(x.w-x.k)/x.w });
+  DROPLIST=shown.slice(0,8);
+  $('dropsL').innerHTML=AS.map(function(a){ return per[a]?'<a href="/?archive='+a+'&amp;show=drop&amp;sort=drop">'+esc(ARCH[a].name)+' <b>'+won(per[a])+'</b></a>':'' }).join('');
+  l.innerHTML=DROPLIST.map(function(it,i){ return row(it,i,{tag:true}) }).join('');
+  bindImgs(l); box.hidden=false;
 }
 function strip(){
   var el=$('strip'); if(!el) return;
@@ -601,6 +678,10 @@ function roomShell(a){
           '<input id="rq" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder="'+esc(A.ph)+'" aria-label="'+esc(A.name)+' 안에서 찾기">'+
           '<button type="button" class="qx" id="rqx" aria-label="검색어 지우기" hidden><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>'+
         '<button type="button" class="ftog" id="ftog" aria-expanded="false" aria-controls="side">필터<span class="n" id="fn"></span></button>'+
+        '<div class="lay" id="lay" role="group" aria-label="보기">'+
+          '<button type="button" data-lay="grid" aria-pressed="'+(LAY!=='list')+'" aria-label="사진으로 보기"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 1.5h4.5v4.5H1.5zM8 1.5h4.5v4.5H8zM1.5 8h4.5v4.5H1.5zM8 8h4.5v4.5H8z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><span class="lbl">사진</span></button>'+
+          '<button type="button" data-lay="list" aria-pressed="'+(LAY==='list')+'" aria-label="목록으로 보기"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h11M1.5 7h11M1.5 11h11" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><span class="lbl">목록</span></button>'+
+        '</div>'+
         '<a class="skip2" href="#listH">목록으로 건너뛰기</a>'+
         '<div class="selw"><select id="sort" aria-label="정렬">'+SORT.map(function(s){ return '<option value="'+s[0]+'"'+(s[0]==='rel'?' hidden':'')+'>'+s[1]+'</option>' }).join('')+'</select></div>'+
       '</div>'+
@@ -623,7 +704,7 @@ function roomShell(a){
       '<div class="res">'+
         '<div class="applied" id="applied" hidden></div>'+
         '<h2 class="sr" id="listH" tabindex="-1">목록</h2><div class="count" id="count" role="status" aria-live="polite"></div>'+
-        '<div class="grid" id="grid">'+skel(12)+'</div>'+
+        '<div class="'+(LAY==='list'?'ix':'grid')+'" id="grid">'+skel(12)+'</div>'+
         '<div class="more" id="more" hidden><button type="button" class="btn" id="moreBtn">더 보기</button></div>'+
         '<div class="empty" id="empty" hidden></div>'+
         '<section class="seek" id="seek" aria-label="다른 곳에서 찾기" hidden></section>'+
@@ -639,6 +720,7 @@ function sideOpen(on){
   else if(!on && doc.activeElement && s.contains(doc.activeElement)) t.focus();
 }
 var qTimer=null, zTimer=null, SORTB4=null, IO=null;
+var LAY=lsGet('aix.layout')==='list'?'list':'grid';
 function bindRoom(){
   $('cats').addEventListener('click',function(e){
     var b=e.target.closest('[data-cat]'); if(!b) return;
@@ -681,6 +763,9 @@ function bindRoom(){
     zTimer=setTimeout(function(){ if(v===ST.F.size) return; var st=cloneST(); st.F.size=v; st.item=null; ST=st; writeUrl(false); roomUpdate(GEN) },180);
   });
   $('moreBtn').addEventListener('click',function(){ paint(false) });
+  $('lay').addEventListener('click',function(e){ var b=e.target.closest('[data-lay]'); if(!b) return; var v=b.getAttribute('data-lay'); if(v===LAY) return;
+    LAY=v; lsSet('aix.layout',v); var bs=this.querySelectorAll('[data-lay]'); for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-pressed',String(bs[i].getAttribute('data-lay')===v));
+    pvHide(); var keep=SHOWN; paint(true); while(SHOWN<keep && SHOWN<VIEW.length) paint(false) });
   if(IO){ IO.disconnect(); IO=null }
   if('IntersectionObserver' in window){
     var io=IO=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting && !$('more').hidden && SHOWN>0 && SHOWN<VIEW.length) paint(false) }) },{rootMargin:'900px 0px'});
@@ -795,12 +880,12 @@ function roomUpdate(gen){
   var d=DATA[a], p=P[a], F=ST.F;
   compute(a); title();
   // head
-  var tn=d.__tn, cl=p.CERT, st=function(l,n,x){ return '<span class="st">'+l+' <b>'+won(n)+'</b>'+(x||'')+'</span>' };
-  var bits=[st('매물',d.__cards), st(esc(cl.A),tn.A), st(esc(cl.B),tn.B), st(esc(cl.C),tn.C)];
+  var tn=d.__tn, cl=p.CERT, st=function(l,n){ return '<span class="st"><em>'+l+'</em><b>'+(typeof n==='number'?won(n):n)+'</b></span>' };
+  var bits=[st('매물',d.__cards), st(esc(cl.A),tn.A)];
   if(!d.__allnew) bits.push(st('신규',d.__fresh));
   if(d.__sold) bits.push(st('판매 기록',d.__sold));
-  bits.push('<span class="st upd">'+esc(kst(d.built))+'</span>');
-  $('rm').innerHTML=bits.join('<i class="dot" aria-hidden="true">·</i>');
+  bits.push(st('갱신',esc(kst(d.built))));
+  $('rm').innerHTML=bits.join('');
   var sn=$('since');
   if(SINCE[a]){ var ns=0; d.items.forEach(function(it){ if(!it.x && !it.so && it.f && it.f>SINCE[a]) ns++ });
     sn.hidden=!ns; sn.innerHTML=ns?'<button type="button" aria-pressed="'+!!F.flag.since+'">지난 방문 '+esc(md(SINCE[a]))+' 이후 <b>'+won(ns)+'</b></button>':'' }
@@ -846,7 +931,10 @@ function facets(a){
   O.y.forEach(function(y){ var on=!!F.y[y], n=fc.y[y]||0;
     yh+='<button type="button" class="yb'+(on?' on':'')+(!n&&!on?' z':'')+(y==='none'?' none':'')+'" data-g="y" data-v="'+y+'" aria-pressed="'+on+'" aria-label="'+(y==='none'?'연도 미표기':y+'년')+' '+won(n)+'건">'+
       '<span>'+(y==='none'?'미표기':y)+'</span><i>'+won(n)+'</i></button>' });
-  $('f-y').innerHTML=yh;
+  var fy=$('f-y'); fy.innerHTML=yh;
+  var ymax=0; O.y.forEach(function(y){ if(y!=='none') ymax=Math.max(ymax,fc.y[y]||0) });
+  var ybs=fy.querySelectorAll('.yb'); for(var yi=0;yi<ybs.length;yi++){ var yv=ybs[yi].getAttribute('data-v'), yn=fc.y[yv]||0;
+    ybs[yi].style.setProperty('--v', ymax && yv!=='none' ? (yn/ymax).toFixed(3) : '0') }
   $('f-cert').innerHTML=O.cert.map(function(c){ return opt('cert',c,esc(p.CERT[c]),fc.cert[c]||0,!!F.cert[c]) }).join('');
   $('g-motif').hidden=!O.motif.length;
   $('f-motif').innerHTML=O.motif.map(function(m){ return opt('motif',m,esc(p.motifLbl(m)),fc.motif[m]||0,!!F.motif[m]) }).join('');
@@ -904,9 +992,10 @@ function paint(reset){
   if(reset){ g.innerHTML=''; SHOWN=0 }
   var end=Math.min(VIEW.length,SHOWN+BATCH), h='', anim=!reset || FX.fresh;
   if(reset) FX.fresh=false;
-  for(var i=SHOWN;i<end;i++) h+=card(VIEW[i],{eager:reset && i<4});
+  var list=LAY==='list'; if(reset) g.className=list?'ix':'grid';
+  for(var i=SHOWN;i<end;i++) h+=list?row(VIEW[i],i):card(VIEW[i],{eager:reset && i<4});
   g.insertAdjacentHTML('beforeend',h); SHOWN=end;
-  bindImgs(g); if(anim) reveal(g);
+  bindImgs(g); if(anim && !list) reveal(g);
   var mo=$('more'); mo.hidden=SHOWN>=VIEW.length;
   $('moreBtn').textContent='더 보기 · '+won(VIEW.length-SHOWN)+'건';
   prog();
@@ -1024,7 +1113,7 @@ var DV={it:null, list:null, idx:-1, pushed:false, ret:null};
 function listFor(it){
   if(ST.view==='room' && ST.a===it.__a) return VIEW;
   if(ST.view==='saved') return SAVEDLIST;
-  if(ST.view==='home') return TODAYLIST;
+  if(ST.view==='home'){ if(TODAYLIST.indexOf(it)>=0) return TODAYLIST; if(DROPLIST.indexOf(it)>=0) return DROPLIST; if(TILELIST.indexOf(it)>=0) return TILELIST; return TODAYLIST }
   return null;
 }
 function findItem(k){
@@ -1066,7 +1155,7 @@ function openFrom(it,cardEl){
 }
 // and shrinks back into its card, when that card is on the page
 function closeMorph(fn){
-  var it=DV.it, di=$('dvImg'), box=it && doc.querySelector('.grid [data-a="'+it.__a+'"][data-k="'+it.__k+'"]');
+  var it=DV.it, di=$('dvImg'), sel=it?'[data-a="'+it.__a+'"][data-k="'+it.__k+'"]':'', box=it && doc.querySelector('.grid '+sel+', .ix '+sel+', .col '+sel);
   var im=box && shownImg(box);
   if(!di || !di.classList.contains('on') || !im || !canMorph()){ fn(false); return }
   di.style.viewTransitionName='pic'; root.classList.add('vt-on');
@@ -1213,7 +1302,7 @@ function mainImg(a,u,alt,lo){
 function showPhoto(i){
   var it=DV.it; if(!it) return; var ph=P[it.__a].photosOf(it), u=okUrl(ph[i]); if(!u) return;
   var im=$('dvImg'); if(im){ im.classList.remove('on'); im.removeAttribute('data-b'); im.removeAttribute('data-hi'); var t=thumb(it.__a,u,1200); im.src=t; if(t!==u) im.setAttribute('data-full',u); else im.removeAttribute('data-full'); bindImgs($('dv')) }
-  DV.ph=i;
+  DV.ph=i; lensOff(true);
   var pn=$('dvPn'); if(pn) pn.textContent=(i+1)+' / '+ph.length;
   var bs=$('dv').querySelectorAll('[data-ph]'); for(var j=0;j<bs.length;j++){ if(j===i) bs[j].setAttribute('aria-current','true'); else bs[j].removeAttribute('aria-current') }
 }
@@ -1234,6 +1323,7 @@ $('ov').addEventListener('pointerup',function(e){
 },{passive:true});
 $('ov').addEventListener('click',function(e){
   if(e.target.closest('[data-close]')){ closeByUser(); return }
+  var mm=e.target.closest('.dv-main'); if(mm && FINE.matches && !e.target.closest('button')){ if(mm.classList.contains('zoom')) lensOff(); else lensOn(e); return }
   var s=e.target.closest('[data-step]'); if(s){ step(+s.getAttribute('data-step')); return }
   var sv=e.target.closest('[data-save]'); if(sv){ if(DV.it) toggleSave(DV.it); return }
   if(e.target.closest('[data-copy]')){ copyLink(); return }
@@ -1328,13 +1418,14 @@ doc.addEventListener('click',function(e){
   if(sk){ var tid=(sk.getAttribute('href')||'').replace(/^#/,''), tg=$(tid); if(tg){ e.preventDefault(); if(!tg.hasAttribute('tabindex')) tg.setAttribute('tabindex','-1'); tg.focus({preventScroll:true});
       var y=tg.getBoundingClientRect().top+window.scrollY-(tid==='listH'?140:0); window.scrollTo(0,Math.max(0,y)) } return }
   var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry'); delete FAIL[ra]; refresh(); if(ST.view==='home') homeUpdate(GEN); return }
-  var sv=e.target.closest('.card [data-save]'); if(sv){ var it=itemOfEl(sv); if(it) toggleSave(it); return }
+  var sv=e.target.closest('.card [data-save], .row [data-save]'); if(sv){ var it=itemOfEl(sv); if(it) toggleSave(it); return }
+  var sh=e.target.closest('[data-shelf]'); if(sh){ var g=$('tgrid'); if(g) g.scrollBy({left:(+sh.getAttribute('data-shelf'))*Math.max(200,g.clientWidth*.8), behavior:fxOn()?'smooth':'auto'}); return }
   var sri=e.target.closest('[data-sri]');
   if(sri && !mod){ e.preventDefault(); var r=SRES[+sri.getAttribute('data-sri')]; closeSearch(true); if(!r) return;
     var F=blankF(); F.q=r.q; var target=r.it;
     go({view:'room', a:target.__a, F:F, sort:'rel', item:null}, true, function(){ openItem(target) }); return }
-  var op=e.target.closest('.card [data-open]');
-  if(op && !(mod && op.tagName==='A')){ e.preventDefault(); openFrom(itemOfEl(op), op.closest('.card')); return }
+  var op=e.target.closest('.card [data-open], .row [data-open], .tile[data-open]');
+  if(op && !(mod && op.tagName==='A')){ e.preventDefault(); pvHide(); openFrom(itemOfEl(op), op.closest('.card, .row, .tile')); return }
   var a=e.target.closest('a'); if(!a || mod || a.target==='_blank' || a.hasAttribute('download')) return;
   var href=a.getAttribute('href')||''; if(!/^\/(\?[^#]*)?$/.test(href)) return;
   e.preventDefault(); closeDrawer(true); closeSearch(true);
@@ -1374,6 +1465,66 @@ if(WIDE.addEventListener) WIDE.addEventListener('change',function(){ root.classL
 (function(){ var fb=$('footBig'); if(!fb) return;
   if(!fxOn() || !('IntersectionObserver' in window)){ fb.classList.add('in'); return }
   var io=new IntersectionObserver(function(es){ if(es[0].isIntersecting){ fb.classList.add('in'); io.disconnect() } },{threshold:.2}); io.observe(fb) })();
+
+/* ---------------------------------------------------------------- the index's photograph under the pointer */
+var FINE=mq('(hover:hover) and (pointer:fine)');
+var PV=null, PVK=null, PVX=0, PVY=0, PVR=0;
+function pvEl(){ if(PV) return PV; PV=doc.createElement('div'); PV.className='pv'; PV.setAttribute('aria-hidden','true');
+  var im=doc.createElement('img'); im.alt=''; im.decoding='async'; PV.appendChild(im); doc.body.appendChild(PV); return PV }
+function pvHide(){ if(PV) PV.classList.remove('on'); PVK=null }
+function pvMove(){ PVR=0; if(!PV) return; var w=PV.offsetWidth||220, h=PV.offsetHeight||275;
+  var x=PVX+32, y=PVY-h*.5; if(x+w>innerWidth-16) x=PVX-32-w; y=Math.max(16,Math.min(innerHeight-h-16,y));
+  PV.style.setProperty('--px',Math.round(x)+'px'); PV.style.setProperty('--py',Math.round(y)+'px') }
+doc.addEventListener('pointermove',function(e){
+  if(!FINE.matches || e.pointerType!=='mouse') return;
+  var r=e.target.closest && e.target.closest('.ix .row');
+  if(!r || DV.it || !fxOn()){ if(PVK) pvHide(); return }
+  PVX=e.clientX; PVY=e.clientY;
+  var k=r.getAttribute('data-k');
+  if(k!==PVK){ var it=itemOfEl(r), u=it && okUrl(P[it.__a].photosOf(it)[0]); if(!u){ pvHide(); return }
+    var el=pvEl(), im=el.firstChild, first=!el.classList.contains('on'); PVK=k; im.src=okUrl(thumb(it.__a,u,600))||u;
+    if(first){ pvMove(); nextFrame(function(){ if(PVK===k) el.classList.add('on') }) } }
+  if(!PVR) PVR=requestAnimationFrame(pvMove);
+},{passive:true});
+doc.addEventListener('pointerleave',pvHide);
+
+/* ---------------------------------------------------------------- a closer look: the large photograph, twice over, under the pointer */
+function lensOn(e){
+  var m=e.target.closest('.dv-main'), im=$('dvImg'); if(!m || !im || !im.classList.contains('on')) return;
+  var ln=m.querySelector('.lens');
+  if(!ln){ ln=doc.createElement('span'); ln.className='lens'; ln.setAttribute('aria-hidden','true');
+    var z=doc.createElement('img'); z.alt=''; z.decoding='async'; z.src=im.getAttribute('data-hi')||im.currentSrc||im.src; ln.appendChild(z); m.appendChild(ln) }
+  lensAt(m,e); m.classList.add('zoom');
+}
+function lensAt(m,e){ var ln=m.querySelector('.lens'); if(!ln) return; var r=m.getBoundingClientRect();
+  ln.style.setProperty('--lx',Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100)).toFixed(2)+'%');
+  ln.style.setProperty('--ly',Math.max(0,Math.min(100,(e.clientY-r.top)/r.height*100)).toFixed(2)+'%') }
+function lensOff(drop){ var m=doc.querySelector('.dv-main'); if(!m) return; m.classList.remove('zoom'); if(drop){ var ln=m.querySelector('.lens'); if(ln) ln.remove() } }
+$('ov').addEventListener('pointermove',function(e){ if(e.pointerType!=='mouse') return; var m=e.target.closest('.dv-main');
+  if(m){ if(!m.classList.contains('can') && FINE.matches) m.classList.add('can'); if(m.classList.contains('zoom')) lensAt(m,e) } },{passive:true});
+$('ov').addEventListener('pointerleave',function(){ lensOff() },{passive:true});
+$('ov').addEventListener('pointerout',function(e){ var m=e.target.closest && e.target.closest('.dv-main'); if(m && !m.contains(e.relatedTarget)) lensOff() },{passive:true});
+
+/* ---------------------------------------------------------------- the head steps aside while reading down; the front page's photographs drift */
+var LASTY=window.scrollY||0, SCR=0;
+function topScroll(){
+  var y=window.scrollY, dy=y-LASTY; LASTY=y;
+  if(root.classList.contains('lock')) return;
+  if(dy>6 && y>220) root.classList.add('hide-top');
+  else if(dy<-6 || y<140) root.classList.remove('hide-top');
+}
+function drift(){ if(ST.view!=='home' || !fxOn()) return; var h=$('hero'); if(!h) return; var y=window.scrollY;
+  if(y>h.offsetHeight+160 && h.__sy===Math.round(h.offsetHeight+160)) return;
+  var v=Math.round(Math.min(y,h.offsetHeight+160)); h.__sy=v; h.style.setProperty('--sy',String(v)) }
+window.addEventListener('scroll',function(){ if(!SCR) SCR=requestAnimationFrame(function(){ SCR=0; topScroll(); drift(); if(PVK) pvHide() }) },{passive:true});
+// one archive in focus on the front page: its name stays, its photographs stay, the rest steps back
+function heroFocus(a){ var h=$('hero'); if(!h) return; if(a) h.setAttribute('data-focus',a); else h.removeAttribute('data-focus') }
+doc.addEventListener('pointerover',function(e){
+  if(ST.view!=='home' || (e.pointerType && e.pointerType!=='mouse')) return;
+  var r=e.target.closest && e.target.closest('.hero .room');
+  if(r) heroFocus(r.getAttribute('data-focus')); else if(!(e.target.closest && e.target.closest('.hero .rooms'))) heroFocus(null);
+},{passive:true});
+doc.addEventListener('focusin',function(e){ if(ST.view!=='home') return; var r=e.target.closest && e.target.closest('.hero .room'); heroFocus(r?r.getAttribute('data-focus'):null) });
 
 /* ---------------------------------------------------------------- start */
 // the page puts the reader back itself (keepPlace); the browser's own guess lands on the previous view's height

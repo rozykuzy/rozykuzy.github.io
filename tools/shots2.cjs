@@ -20,6 +20,16 @@ const list = process.argv.slice(2);
     'search-1440': ['/', { width: 1440, height: 900 }, {}, async (p) => { await p.keyboard.press('/'); await p.keyboard.type('bondage'); }],
     'about-1440': ['/?view=about', { width: 1440, height: 900 }, {}],
     'filter-390': ['/?archive=hl', { width: 390, height: 844 }, { mobile: true, dpr: 2 }, async (p) => { await p.click('#ftog') }],
+    'hl-list-1440': ['/?archive=hl', { width: 1440, height: 900 }, { storage: { 'aix.layout': 'list' } }, async (p) => { await p.mouse.move(700, 520); await p.mouse.move(720, 540) }],
+    'hl-list-390': ['/?archive=hl', { width: 390, height: 844 }, { mobile: true, dpr: 2, storage: { 'aix.layout': 'list' } }],
+    'home-focus-ccp-1440': ['/', { width: 1440, height: 900 }, {}, async (p) => { const b = await p.$('.room.r-ccp .room-name'); const r = await b.boundingBox(); await p.mouse.move(r.x + r.width / 2, r.y + r.height / 2) }],
+    'home-scroll-1440': ['/', { width: 1440, height: 900 }, {}, async (p) => { await p.mouse.wheel(0, 500); await p.waitForTimeout(400) }],
+    'hl-wide-1920': ['/?archive=hl', { width: 1920, height: 1080 }, {}],
+    'ccp-detail-1440': ['/?archive=ccp', { width: 1440, height: 900 }, {}, async (p) => { await p.click('#grid .card:nth-child(3) .ph') }],
+    'room-tablet-820': ['/?archive=hl', { width: 820, height: 1180 }, { mobile: true, dpr: 2 }],
+    'home-tablet-820': ['/', { width: 820, height: 1180 }, { mobile: true, dpr: 2 }],
+    'home-1280': ['/', { width: 1280, height: 760 }, {}],
+    'home-reduced-1440': ['/', { width: 1440, height: 900 }, { reduced: true }],
   };
   for (const k of Object.keys(jobs)) {
     if (list.length && !list.includes(k)) continue;

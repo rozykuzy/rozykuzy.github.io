@@ -22,7 +22,7 @@ from pathlib import Path
 SITE = Path(__file__).resolve().parent.parent
 OUT = SITE / 'fonts' / 'index-sans.woff2'
 SRC_DEFAULT = '/tmp/pt/package/dist/web/variable/woff2/PretendardVariable.woff2'
-FILES = ['app.js', 'engine.js', 'index.html', '404.html']
+FILES = ['app.js', 'engine.js', 'index.html', '404.html', 'app.css']
 FIXTURES = ['fixtures/helmut-lang/index.html', 'fixtures/ccp/index.html']
 FIELDS = ['r', 's', 'q', 'z', 'sk']
 EXTRA = ('야후옥션 야후 플리마 메루카리 메르카리 라쿠마 세컨드스트리트 후루츠패밀리 번개장터 당근 중고나라 '
