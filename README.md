@@ -12,7 +12,10 @@ Helmut Lang(1986–2005)과 Carol Christian Poell 두 아카이브를 한 화면
 - **저장** 브라우저 localStorage `hlx.saved` · `ccpx.saved` — 두 브랜드 페이지와 같은 키라 어느 쪽에서 저장해도 같은 목록이다.
 - **디자인 (2026-09-29, v3 "catalogue")** 경매 도록과 패션 색인의 중간. Helmut Lang은 종이(#f1efe9), Carol Christian Poell은
   카본(#0e0d0c), 둘 다 옅은 그레인(`grain.png`, 배경에만 — 사진 위에는 없다). 처음 화면은 두 이름과 그 둘레의 매물 사진(날마다 같은 섞기),
-  이름에 올리면 그 아카이브만 남는다. 방에는 사진 보기와 목록 보기(번호 · 연도 · 제목 · 사이즈 · 판매처 · 가격, 줄에 올리면 사진)가 있고
+  이름에 올리면 그 아카이브만 남는다. 사진 크기는 처음 화면 너비의 1%와 높이의 1%×k(휴대폰 .55 · 600px부터 .9 · 768px부터 1.77) 중 작은 쪽(`--u`, 컨테이너 단위)이 기준이라
+  넓고 낮은 화면에서도 이름을 덮지 않는다. 위 줄은 위 끝에, 아래 줄은 아래 끝(갱신 줄 위)에 붙는다. 크기는 `:nth-child`에 width로
+  쓰지 않고 변수로만 준다 — 거기 width를 쓰면 넓은 화면 규칙보다 우선한다(2026-09-29 실제로 한 번 겹침). 바꾼 뒤에는
+  `node tools/collage.cjs`로 휴대폰부터 3440px까지 28개 크기에서 사진이 글자·서로·가장자리에 닿지 않는지 확인한다. 방에는 사진 보기와 목록 보기(번호 · 연도 · 제목 · 사이즈 · 판매처 · 가격, 줄에 올리면 사진)가 있고
   선택은 이 브라우저에만 기억한다(`aix.layout`). 연도 필터는 연도마다 막대. 상세 사진은 누르면 두 배로 가까이 본다.
 - **글꼴** 셋, 모두 SIL OFL 1.1, 이 사이트가 직접 둔다(외부 글꼴 요청 없음).
   `fonts/index-sans.woff2` — Pretendard Variable(길형진)을 이 사이트 글자만 남기고 줄인 파일. 예약 글꼴 이름 때문에 Index Sans로 바꿨고
@@ -33,7 +36,7 @@ Helmut Lang(1986–2005)과 Carol Christian Poell 두 아카이브를 한 화면
 | `404.html` | 없는 주소 |
 | `fonts/` | Index Sans · Index Serif · Index Mono와 라이선스 |
 | `grain.png` | 종이·카본의 그레인 (100px 타일) |
-| `tools/` | engine.js 생성 · 글꼴 자르기 · 로컬 미리보기 · 브라우저 검증 (`fixtures/`에 두 브랜드 페이지를 받아 두고 돌린다: suite · suite_fx · a11y · keys · since · fail · perf) |
+| `tools/` | engine.js 생성 · 글꼴 자르기 · 로컬 미리보기 · 브라우저 검증 (`fixtures/`에 두 브랜드 페이지를 받아 두고 돌린다: suite · suite_fx · collage · a11y · keys · since · fail · perf) |
 
 engine.js 다시 만들기:
 

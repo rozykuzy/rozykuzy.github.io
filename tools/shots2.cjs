@@ -30,6 +30,12 @@ const list = process.argv.slice(2);
     'home-tablet-820': ['/', { width: 820, height: 1180 }, { mobile: true, dpr: 2 }],
     'home-1280': ['/', { width: 1280, height: 760 }, {}],
     'home-reduced-1440': ['/', { width: 1440, height: 900 }, { reduced: true }],
+    'home-1920': ['/', { width: 1920, height: 1080 }, {}],
+    'home-1366': ['/', { width: 1366, height: 768 }, {}],
+    'home-2560': ['/', { width: 2560, height: 1440 }, {}],
+    'home-375': ['/', { width: 375, height: 667 }, { mobile: true, dpr: 2 }],
+    'home-side-740': ['/', { width: 740, height: 360 }, { mobile: true, dpr: 2 }],
+    'home-side-844': ['/', { width: 844, height: 390 }, { mobile: true, dpr: 2 }],
   };
   for (const k of Object.keys(jobs)) {
     if (list.length && !list.includes(k)) continue;

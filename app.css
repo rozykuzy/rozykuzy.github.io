@@ -161,7 +161,7 @@ html.hide-top .top{transform:translate3d(0,-100%,0)}
 .hero{position:relative;overflow:hidden;min-height:calc(100svh - var(--topH) - var(--stripH) - 56px);display:grid;place-items:center;
   padding:88px var(--X) 96px;background:var(--bg);color:var(--ink);isolation:isolate;
   transition:background-color .7s var(--io),color .7s var(--io)}
-.col{position:absolute;inset:0;z-index:0;pointer-events:none}
+.col{position:absolute;inset:0;z-index:0;pointer-events:none;container-type:size}
 .tile{position:absolute;display:block;pointer-events:auto;cursor:pointer;
   transform:translate3d(0,calc(var(--sy,0) * var(--f,.1) * -1px),0);will-change:transform}
 .tile .ph{position:relative;display:block;width:100%;aspect-ratio:4/5;overflow:hidden;background:var(--tint);
@@ -183,11 +183,16 @@ html.hide-top .top{transform:translate3d(0,-100%,0)}
 /* one archive in focus: its photographs stay, the other's step back */
 .hero[data-focus] .tile .ph{transition-delay:0s!important}
 .hero[data-focus="hl"] .tile[data-a="ccp"] .ph,.hero[data-focus="ccp"] .tile[data-a="hl"] .ph{opacity:.1;filter:grayscale(1)}
-/* phone: eight photographs, a row above and a row below the names */
-.tile{width:22vw}
-.tile:nth-child(1){left:4%;top:4%}   .tile:nth-child(2){left:30%;top:9%;width:17vw} .tile:nth-child(3){left:53%;top:3%;width:19vw}
-.tile:nth-child(4){left:77%;top:8%}  .tile:nth-child(5){left:5%;top:72%;width:18vw} .tile:nth-child(6){left:28%;top:79%;width:21vw}
-.tile:nth-child(7){left:55%;top:74%;width:17vw} .tile:nth-child(8){left:76%;top:79%;width:20vw}
+/* The photographs are measured in --u: a hundredth of the sheet's width, or of its height times the sheet's
+   usual proportion (--k), whichever is smaller. A wide, short screen shrinks them with its height, so they
+   never run into the names. The top row hangs from the top edge; the bottom row stands on the bottom edge,
+   clear of the date line. Sizes are variables — a width on :nth-child would outrank the wider layouts. */
+.tile{--u:min(1cqw, calc(var(--k,.55) * 1cqh));width:calc(var(--pw,22) * var(--ps,1) * var(--u))}
+/* phone: eight, four above the names and four below */
+.tile:nth-child(1){left:4%;top:4%}   .tile:nth-child(2){left:30%;top:9%;--pw:17} .tile:nth-child(3){left:53%;top:3%;--pw:19}
+.tile:nth-child(4){left:77%;top:8%;--pw:21}
+.tile:nth-child(5){left:5%;bottom:calc(48px + 10 * var(--u));--pw:18} .tile:nth-child(6){left:28%;bottom:48px;--pw:21}
+.tile:nth-child(7){left:55%;bottom:calc(48px + 11 * var(--u));--pw:17} .tile:nth-child(8){left:76%;bottom:calc(48px + 2 * var(--u));--pw:20}
 .tile:nth-child(n+9){display:none}
 .tile:nth-child(3n+1){--f:.12}.tile:nth-child(3n+2){--f:.24}.tile:nth-child(3n){--f:.36}
 
@@ -195,7 +200,7 @@ html.hide-top .top{transform:translate3d(0,-100%,0)}
 .room{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;text-decoration:none;color:inherit;
   transition:opacity .5s var(--ease)}
 .room-no{font:400 10.5px/1 var(--mono);color:var(--soft);letter-spacing:.04em}
-.room-name{position:relative;display:block;font:400 clamp(44px,11.4vw,64px)/.94 var(--serif);letter-spacing:-.012em;white-space:nowrap}
+.room-name{position:relative;display:block;font:400 clamp(44px,min(11.4vw,calc((100svh - var(--topH) - var(--stripH)) * .09)),64px)/.94 var(--serif);letter-spacing:-.012em;white-space:nowrap}
 .room-name .wd{padding-right:.14em;margin-right:-.14em}
 .room-meta{display:flex;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:4px 14px;font:400 11px/1.3 var(--mono);color:var(--mid);letter-spacing:0}
 .room-stat{display:inline-flex;gap:12px}
@@ -627,7 +632,7 @@ html.hide-top .bar{top:0}
 /* ---------------------------------------------------------------- 600+ */
 @media(min-width:600px){
   :root{--gut:24px;--cols:3;--gapc:16px;--gapr:40px}
-  .tile{width:15vw}
+  .tile{--ps:.7;--k:.9}
   .shelf{grid-auto-columns:calc((100% - 2 * var(--X) - 2 * var(--gapc)) / 2.5)}
   .rh{padding-top:36px}
   .row{grid-template-columns:40px 56px minmax(0,1fr) auto auto;grid-template-areas:"no ph t p sv" "no ph m p sv"}
@@ -638,22 +643,35 @@ html.hide-top .bar{top:0}
   .lay .lbl{display:inline}
   .lay button svg{display:none}
 }
+/* a phone held sideways: the names take the middle, the photographs stand in the two margins */
+@media(max-width:767px) and (orientation:landscape) and (max-height:500px){
+  .tile{--ps:1}
+  .tile:nth-child(1){left:3%;top:7%;bottom:auto}      .tile:nth-child(2){left:15.5%;top:28%;bottom:auto}
+  .tile:nth-child(3){left:76%;top:6%;bottom:auto}     .tile:nth-child(4){left:88%;top:26%;bottom:auto}
+  .tile:nth-child(5){left:4%;top:58%;bottom:auto}     .tile:nth-child(6){left:14.5%;top:70%;bottom:auto;--pw:18}
+  .tile:nth-child(7){left:76.5%;top:55%;bottom:auto}    .tile:nth-child(8){left:87%;top:68%;bottom:auto}
+}
 @media(max-width:599px){ .row .r-p.big{display:none} .row>.r-p{display:none} .dv-tag .nm-l{display:none} .dv-tag .nm-s{display:inline} }
 
 /* ---------------------------------------------------------------- 768+ */
 @media(min-width:768px){
   :root{--gut:28px;--gapc:20px;--gapr:46px;--topH:56px}
   .hero{padding-top:96px;padding-bottom:104px}
-  .room-name{font-size:clamp(64px,8.6vw,118px)}
-  .tile{width:calc(var(--w,9) * var(--tk,1) * 1vw)}
+  /* the names follow the same rule as the photographs: the width, or the height on a short screen */
+  .room-name{font-size:clamp(56px,min(8vw,calc((100svh - var(--topH) - var(--stripH)) * .1345)),118px)}
+  /* fourteen: a row hanging from the top, two margins beside the names, a row standing on the bottom */
+  .tile{--k:1.77;width:calc(var(--w,9) * var(--tk,1) * var(--u))}
   .tile:nth-child(n+9){display:block}
-  .tile:nth-child(1){left:3%;top:7%;--w:8.6}     .tile:nth-child(2){left:15%;top:13%;--w:11}
-  .tile:nth-child(3){left:5%;top:44%;--w:9.6}    .tile:nth-child(4){left:12.5%;top:67%;--w:9}
-  .tile:nth-child(5){left:2%;top:84%;--w:7.4}    .tile:nth-child(6){left:31%;top:4%;--w:6.6}
-  .tile:nth-child(7){left:24%;top:83%;--w:7.8}   .tile:nth-child(8){left:61%;top:3%;--w:7.6}
-  .tile:nth-child(9){left:62%;top:84%;--w:7}     .tile:nth-child(10){left:74%;top:11%;--w:10}
-  .tile:nth-child(11){left:89%;top:5%;--w:8}     .tile:nth-child(12){left:80.5%;top:55%;--w:10.6}
-  .tile:nth-child(13){left:91%;top:36%;--w:7.8}  .tile:nth-child(14){left:88%;top:79%;--w:8.8}
+  .tile:nth-child(1){left:3%;top:7%;bottom:auto;--w:8.6}      .tile:nth-child(2){left:15%;top:13%;bottom:auto;--w:11}
+  .tile:nth-child(3){left:5%;top:44%;bottom:auto;--w:9.6}     .tile:nth-child(4){left:12.5%;top:67%;bottom:auto;--w:9}
+  .tile:nth-child(5){left:2%;top:auto;bottom:calc(30px + .5 * var(--u));--w:7.4}
+  .tile:nth-child(6){left:31%;top:4%;bottom:auto;--w:6.6}
+  .tile:nth-child(7){left:24%;top:auto;bottom:calc(30px + 1.5 * var(--u));--w:7.8}
+  .tile:nth-child(8){left:61%;top:3%;bottom:auto;--w:7.6}
+  .tile:nth-child(9){left:66%;top:auto;bottom:30px;--w:7}     .tile:nth-child(10){left:74%;top:11%;bottom:auto;--w:10}
+  .tile:nth-child(11){left:89%;top:5%;bottom:auto;--w:8}      .tile:nth-child(12){left:80%;top:50%;bottom:auto;--w:10}
+  .tile:nth-child(13){left:91%;top:30%;bottom:auto;--w:7.4}
+  .tile:nth-child(14){left:88.5%;top:auto;bottom:calc(30px + 1 * var(--u));--w:8.4}
   .room-meta{font-size:11.5px}
   .rh{grid-template-columns:minmax(0,1fr) auto;column-gap:40px;padding-top:44px;padding-bottom:26px}
   .rh-top{grid-column:1/-1}
@@ -705,7 +723,7 @@ html.hide-top .bar{top:0}
   .u.about{display:inline-flex}
   .strip .s{display:none}
   .hero{min-height:max(640px,calc(100svh - var(--topH) - var(--stripH)))}
-  .room-name{font-size:clamp(84px,7.6vw,150px)}
+  .room-name{font-size:clamp(76px,min(7.6vw,calc((100svh - var(--topH) - var(--stripH)) * .1345)),150px)}
   .room:hover .room-go,.room:focus-visible .room-go{opacity:1;transform:translate3d(0,-50%,0)}
   .shelf{grid-auto-columns:calc((100% - 2 * var(--X) - 3 * var(--gapc)) / 4.35)}
   .rh .rm{column-gap:28px}
