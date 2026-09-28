@@ -1383,9 +1383,13 @@ ST=readUrl(location.search);
 if(ST.view!=='room') writeUrl(false);
 if(ST.view==='home'){ AS.forEach(function(a){ load(a).catch(function(){}) }) }
 mount(); update(); syncItem();
-// the other archive, quietly, so switching rooms is instant
+// the other archive, quietly, so switching rooms is instant — but only after the room being read has its
+// own data: on a slow line the two downloads would otherwise share it and the first cards come later
 var SAVE=navigator.connection && navigator.connection.saveData;
-if(!SAVE) setTimeout(function(){ AS.forEach(function(a){ if(!DATA[a] && !PEND[a] && !FAIL[a]) load(a).then(function(){ strip() },function(){}) }) },1500);
+function prefetch(){ AS.forEach(function(a){ if(!DATA[a] && !PEND[a] && !FAIL[a]) load(a).then(function(){ strip() },function(){}) }) }
+if(!SAVE){ var first=ST.view==='room' ? PEND[ST.a] : null;
+  if(first) first.then(function(){ setTimeout(prefetch,600) },function(){ setTimeout(prefetch,600) });
+  else setTimeout(prefetch,1500) }
 if(DATA.hl || DATA.ccp) strip();
 AS.forEach(function(a){ if(PEND[a]) PEND[a].then(strip,function(){}) });
 })();
