@@ -165,13 +165,55 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
   { console.log('hostile urls'); const p = await H.page(b, { width: 1280, height: 900 });
     for (const u of ['/?archive=hl&sort=%22&q=%&year=abcd,1998-1990&category=__proto__&show=constructor,gone&item=ZZZZZZZZZZ&source=%3Cscript%3Ealert(1)%3C%2Fscript%3E',
       '/?archive=ccp&year=1000-3000&price=__proto__&label=toString&size=%3Cb%3E&q=%E0%A4%A',
-      '/?view=about&archive=ccp', '/?archive=HL', '/?archive=ccp&item=0', '/?view=saved&item=abc']) {
+      '/?view=about&archive=ccp', '/?archive=HL', '/?archive=ccp&item=0', '/?view=saved&item=abc',
+      '/?archive=hl&category=constructor&motif=constructor,hasOwnProperty&source=__proto__,toString&label=valueOf']) {
       await p.goto(H.BASE + u); await H.ready(p); await wait(p, 300);
       const s = await p.evaluate(() => ({ q: location.search, toks: [...document.querySelectorAll('#applied .tok')].map((t) => t.textContent), room: document.documentElement.dataset.room, scripts: document.querySelectorAll('main script').length }));
       console.log('   ', u.slice(0, 60), '→', s.q, s.toks.join(' | '));
       ok(s.scripts === 0, 'no injected script');
     }
+    ok(await p.evaluate(() => document.querySelectorAll('#applied .tok').length === 0 && +document.querySelector('#count b').textContent.replace(/,/g, '') > 4000), 'prototype names do not become filters');
+    await p.evaluate(() => localStorage.setItem('hlx.saved', '{"__proto__":{"k":1},"constructor":1}'));
+    await p.goto(H.BASE + '/?view=saved'); await H.ready(p); await wait(p, 400);
+    ok(await p.evaluate(() => document.querySelectorAll('#sgm-hl li').length === 2 && document.querySelectorAll('#sgg-hl .card').length === 0), 'odd saved keys listed as missing, not as listings');
     ok(p.errs.length === 0, 'hostile: no errors ' + p.errs.join(' | '));
+    await p.context().close(); }
+
+
+  // ---------------------------------------------------------------- place, skip link, detail buttons
+  { console.log('place and buttons'); const p = await H.page(b, { width: 1440, height: 900 });
+    await p.goto(H.BASE + '/?archive=hl'); await H.ready(p);
+    await p.click('#moreBtn'); await wait(p, 300);
+    await p.evaluate(() => window.scrollTo(0, 5200)); await wait(p, 300);
+    const y0 = await p.evaluate(() => window.scrollY);
+    await p.evaluate(() => document.querySelector('.arch a[data-nav="ccp"]').click()); await wait(p, 900);
+    ok((await qs(p)) === '?archive=ccp' && await p.evaluate(() => window.scrollY) === 0, 'new room starts at top');
+    await p.goBack(); await wait(p, 900);
+    const y1 = await p.evaluate(() => window.scrollY), n1 = await cards(p);
+    ok(Math.abs(y1 - y0) < 5 && n1 >= 120, 'back returns to the same place ' + y0 + ' → ' + y1 + ' cards ' + n1);
+    await p.evaluate(() => window.scrollTo(0, 0));
+    await p.focus('#sort'); await p.keyboard.press('Shift+Tab'); await wait(p, 100);
+    ok(await p.evaluate(() => document.activeElement.classList.contains('skip2')), 'skip link reachable by keyboard');
+    await p.keyboard.press('Enter'); await wait(p, 200);
+    ok(await p.evaluate(() => document.activeElement.id === 'listH' && location.hash === ''), 'skip link lands on the list, no hash');
+    await p.keyboard.press('Tab'); await wait(p, 100);
+    ok(await p.evaluate(() => !!document.activeElement.closest('#grid')), 'next tab is in the grid');
+    await p.click('#grid .card:nth-child(2) .t a'); await wait(p, 400);
+    await p.click('.dv-nav [data-step="1"]'); await wait(p, 300);
+    ok(/^3 \//.test(await p.$eval('.dv-pos', (e) => e.textContent)), 'next button');
+    ok(await p.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-step') === '1'), 'focus stays on next');
+    await p.click('.dv-nav [data-step="-1"]'); await wait(p, 300);
+    ok(/^2 \//.test(await p.$eval('.dv-pos', (e) => e.textContent)), 'previous button');
+    await p.click('[data-copy]'); await wait(p, 300);
+    ok(/링크 복사함|복사할 수 없음/.test(await p.$eval('#toast', (t) => t.textContent)), 'copy says what happened: ' + await p.$eval('#toast', (t) => t.textContent));
+    const tag = await p.$('.dv-info .tag');
+    if (tag) { const lbl = await tag.textContent(); await tag.click(); await wait(p, 900);
+      ok(/motif=/.test(await qs(p)) && await p.evaluate(() => document.getElementById('ov').hidden), 'motif tag filters the room: ' + lbl + ' ' + (await qs(p))) }
+    const links = await p.evaluate(() => [...document.querySelectorAll('.seek a')].map((a) => a.href).filter((h) => !/^https:\/\//.test(h)));
+    ok(links.length === 0, 'seek links are all https ' + links.join(' '));
+    const orig = await p.$eval('#orig', (a) => a.getAttribute('href'));
+    ok(/^\/helmut-lang\/\?/.test(orig) && /motif=/.test(orig), 'origin link carries the filter ' + orig);
+    ok(p.errs.length === 0, 'place: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
 
   console.log('\n' + pass + ' passed, ' + fails.length + ' failed');

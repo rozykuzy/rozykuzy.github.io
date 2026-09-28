@@ -98,8 +98,9 @@ function ready(a,d){
   d.__order={cat:cats, y:ys.concat(vals.y.none?['none']:[]), src:srcs, motif:mos, mark:mks,
     price:p.PRICE.map(function(x){ return x[0] }), cert:['A','B','C']};
   DATA[a]=d;
-  visit(a,d);
 }
+var VISITED={};
+function seen(a){ if(VISITED[a] || !DATA[a]) return; VISITED[a]=1; visit(a,DATA[a]) }
 // "since your last visit" — the day before this one on which the archive was opened here
 function visit(a,d){
   var today=d.today; if(!today) return;
@@ -239,7 +240,7 @@ function tidy(st){
   var d=DATA[st.a]; if(!d) return;
   var F=st.F, V=d.__vals;
   [['cat','cat'],['y','y'],['motif','motif'],['src','src'],['mark','mark']].forEach(function(g){
-    keys(F[g[0]]).forEach(function(v){ if(!V[g[1]][v]) delete F[g[0]][v] }) });
+    keys(F[g[0]]).forEach(function(v){ if(!own.call(V[g[1]],v)) delete F[g[0]][v] }) });
   if(F.flag.gone && !d.__gone) delete F.flag.gone;
   if(F.flag.sold && !d.__sold) delete F.flag.sold;
   if(F.flag.since && !SINCE[st.a]) delete F.flag.since;
@@ -272,27 +273,35 @@ function qsOf(st, origin){
 function hrefOf(st){ var q=qsOf(st,false); return '/'+(q?'?'+q:'') }
 function writeUrl(push){
   var url=hrefOf(ST);
-  if(url===location.pathname+location.search) return;
-  try{ history[push?'pushState':'replaceState']({aix:1},'',url) }catch(e){}
+  if(url===location.pathname+location.search) return false;
+  try{ history[push?'pushState':'replaceState']({aix:1},'',url); return true }catch(e){ return false }
 }
 function filterKey(){ var s={view:ST.view, a:ST.a, F:ST.F, sort:ST.sort, item:null}; return qsOf(s,false) }
 function copyF(F){ var o=blankF(); ORG.concat(['flag']).forEach(function(g){ for(var k in F[g]) if(own.call(F[g],k) && F[g][k]) o[g][k]=1 }); o.size=F.size; o.q=F.q; return o }
 
 /* ---------------------------------------------------------------- routing */
-function go(st, push, after){ var prev=ST; ST=st; tidy(ST); if(push!==false) writeUrl(true); route(prev, after) }
-function route(prev, after){
+function keepPlace(){ try{ var s=history.state && typeof history.state==='object' ? history.state : {}; var o={}; for(var k in s) if(own.call(s,k)) o[k]=s[k];
+  o.aix=1; o.y=Math.round(window.scrollY); o.n=SHOWN; history.replaceState(o,'') }catch(e){} }
+function go(st, push, after){ var prev=ST; if(push!==false) keepPlace(); ST=st; tidy(ST); if(push!==false) writeUrl(true); route(prev, after) }
+function route(prev, after, place){
   var key=ST.view+':'+(ST.a||'');
   if(prev && key===MOUNTED){
     if(filterKey()!==LASTQ) update();
     syncItem(); if(after) after(); return;
   }
-  var run=function(){ mount(); update(); syncItem(); if(prev){ window.scrollTo(0,0); focusHead() } if(after) after() };
+  var run=function(){ mount(); update(); syncItem();
+    if(prev){
+      if(place && place.y>0){ if(ST.view==='room' && DATA[ST.a]){ while(SHOWN<place.n && SHOWN<VIEW.length) paint(false) } window.scrollTo(0,place.y) }
+      else window.scrollTo(0,0);
+      focusHead();
+    }
+    if(after) after() };
   if(prev && !REDUCED.matches && doc.startViewTransition){ try{ doc.startViewTransition(run) }catch(e){ run() } }
   else run();
 }
-window.addEventListener('popstate',function(){ var prev=ST; ST=readUrl(location.search); tidy(ST); route(prev) });
+window.addEventListener('popstate',function(e){ var prev=ST; ST=readUrl(location.search); tidy(ST); route(prev, null, e.state && typeof e.state==='object' ? e.state : null) });
 
-function focusHead(){ var h=$('vh'); if(h){ try{ h.focus({preventScroll:true}) }catch(e){ h.focus() } } }
+function focusHead(){ var h=$('vh'); if(h){ try{ h.focus({preventScroll:true}) }catch(e){} } }
 
 function roomOf(){ return ST.view==='room' ? ST.a : 'home' }
 function setRoom(r){
@@ -319,6 +328,7 @@ function navUi(){
 
 function mount(){
   MOUNTED=ST.view+':'+(ST.a||''); LASTQ=null; GEN++;
+  if(IO){ IO.disconnect(); IO=null }
   closeDetail(true);
   setRoom(roomOf());
   var m=$('main');
@@ -330,7 +340,7 @@ function mount(){
   navUi(); title();
 }
 function update(){
-  var gen=GEN;
+  var gen=GEN; LASTQ=filterKey();
   if(ST.view==='room') return roomUpdate(gen);
   if(ST.view==='saved') return savedUpdate(gen);
   if(ST.view==='about') return aboutUpdate(gen);
@@ -392,7 +402,7 @@ function card(it,o){
     '</div></article>';
 }
 function skel(n){ var h=''; for(var i=0;i<n;i++) h+='<div class="card sk"><div class="ph"></div><div class="cap"><i></i><i></i><i></i></div></div>'; return h }
-function errBox(a,retry){
+function errBox(a){
   return '<div class="err" role="alert"><p class="err-t">'+esc(ARCH[a].name)+' · 불러오지 못함</p>'+
     '<p class="err-a"><button type="button" class="btn" data-retry="'+a+'">다시 시도</button> '+
     '<a class="lnk" href="'+ARCH[a].path+'">원본 인덱스</a></p></div>';
@@ -403,8 +413,8 @@ function toast(t){ var el=$('toast'); if(!el) return; el.textContent=t; el.class
 function homeShell(){
   return '<h1 class="sr" id="vh" tabindex="-1">Archive Index</h1>'+
   '<section class="rooms" aria-label="아카이브">'+AS.map(function(a){ var A=ARCH[a];
-    return '<a class="room r-'+a+'" href="/?archive='+a+'" data-room-link="'+a+'">'+
-      '<span class="room-top"><span class="no">'+A.no+'</span><span class="sp" id="hs-'+a+'">'+esc(A.span)+'</span></span>'+
+    return '<a class="room r-'+a+'" href="/?archive='+a+'">'+
+      '<span class="room-top"><span class="no">'+A.no+'</span><span class="sp">'+esc(A.span)+'</span></span>'+
       '<span class="room-name">'+A.name.split(' ').map(function(w){ return '<span>'+esc(w)+'</span>' }).join(' ')+'</span>'+
       '<span class="room-foot">'+
         '<span class="room-stat" id="st-'+a+'"><span class="sk w60"></span></span>'+
@@ -434,7 +444,7 @@ function statHtml(a,d){
 }
 function homeUpdate(gen){
   AS.forEach(function(a){
-    var paint=function(){ if(gen!==GEN) return; var d=DATA[a];
+    var paint=function(){ if(gen!==GEN) return; var d=DATA[a]; seen(a);
       var st=$('st-'+a), mo=$('mo-'+a);
       if(st) st.innerHTML=statHtml(a,d);
       if(mo){ mo.innerHTML=mosaic(a,d); bindImgs(mo) }
@@ -496,6 +506,7 @@ function roomShell(a){
           '<input id="rq" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder="'+esc(A.ph)+'" aria-label="'+esc(A.name)+' 안에서 찾기">'+
           '<button type="button" class="qx" id="rqx" aria-label="검색어 지우기" hidden><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>'+
         '<button type="button" class="ftog" id="ftog" aria-expanded="false" aria-controls="side">필터<span class="n" id="fn"></span></button>'+
+        '<a class="skip2" href="#listH">목록으로 건너뛰기</a>'+
         '<div class="selw"><select id="sort" aria-label="정렬">'+SORT.map(function(s){ return '<option value="'+s[0]+'"'+(s[0]==='rel'?' hidden':'')+'>'+s[1]+'</option>' }).join('')+'</select></div>'+
       '</div>'+
     '</div></div>'+
@@ -516,7 +527,7 @@ function roomShell(a){
       '</aside>'+
       '<div class="res">'+
         '<div class="applied" id="applied" hidden></div>'+
-        '<h2 class="sr">목록</h2><div class="count" id="count" role="status" aria-live="polite"></div>'+
+        '<h2 class="sr" id="listH" tabindex="-1">목록</h2><div class="count" id="count" role="status" aria-live="polite"></div>'+
         '<div class="grid" id="grid">'+skel(12)+'</div>'+
         '<div class="more" id="more" hidden><button type="button" class="btn" id="moreBtn">더 보기</button></div>'+
         '<div class="empty" id="empty" hidden></div>'+
@@ -532,7 +543,7 @@ function sideOpen(on){
   if(on && !WIDE.matches){ var x=$('sideX'); if(x) x.focus() }
   else if(!on && doc.activeElement && s.contains(doc.activeElement)) t.focus();
 }
-var qTimer=null, SORTB4=null;
+var qTimer=null, zTimer=null, SORTB4=null, IO=null;
 function bindRoom(){
   $('cats').addEventListener('click',function(e){
     var b=e.target.closest('[data-cat]'); if(!b) return;
@@ -571,12 +582,13 @@ function bindRoom(){
   q.addEventListener('keydown',function(e){ if(e.key==='Enter'){ q.blur() } if(e.key==='Escape' && q.value){ e.stopPropagation(); clearQ() } });
   $('rqx').addEventListener('click',function(){ clearQ(); q.focus() });
   $('fsize').addEventListener('input',function(){
-    var v=this.value.trim().toLowerCase().slice(0,24); clearTimeout(qTimer);
-    qTimer=setTimeout(function(){ if(v===ST.F.size) return; var st=cloneST(); st.F.size=v; st.item=null; ST=st; writeUrl(false); roomUpdate(GEN) },180);
+    var v=this.value.trim().toLowerCase().slice(0,24); clearTimeout(zTimer);
+    zTimer=setTimeout(function(){ if(v===ST.F.size) return; var st=cloneST(); st.F.size=v; st.item=null; ST=st; writeUrl(false); roomUpdate(GEN) },180);
   });
   $('moreBtn').addEventListener('click',function(){ paint(false) });
+  if(IO){ IO.disconnect(); IO=null }
   if('IntersectionObserver' in window){
-    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting && !$('more').hidden && SHOWN>0 && SHOWN<VIEW.length) paint(false) }) },{rootMargin:'900px 0px'});
+    var io=IO=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting && !$('more').hidden && SHOWN>0 && SHOWN<VIEW.length) paint(false) }) },{rootMargin:'900px 0px'});
     io.observe($('more'));
   }
   var c=$('cats'), endp=function(){ c.classList.toggle('end', c.scrollLeft+c.clientWidth>=c.scrollWidth-4) };
@@ -585,7 +597,7 @@ function bindRoom(){
 function clearQ(){ clearTimeout(qTimer); var q=$('rq'); if(q) q.value=''; var x=$('rqx'); if(x) x.hidden=true;
   if(!ST.F.q) return; var st=cloneST(); st.F.q=''; if(st.sort==='rel'){ st.sort=SORTB4||'new'; SORTB4=null } st.item=null; ST=st; writeUrl(false); roomUpdate(GEN) }
 function cloneST(){ return {view:ST.view, a:ST.a, F:copyF(ST.F), sort:ST.sort, item:ST.item} }
-function clearAll(){ clearTimeout(qTimer); var F=blankF(); SORTB4=null; go({view:'room', a:ST.a, F:F, sort:ST.sort==='rel'?'new':ST.sort, item:null}) }
+function clearAll(){ clearTimeout(qTimer); clearTimeout(zTimer); var F=blankF(); SORTB4=null; go({view:'room', a:ST.a, F:F, sort:ST.sort==='rel'?'new':ST.sort, item:null}) }
 function offClick(e){
   var b=e.target.closest('[data-off]'); if(!b) return;
   if(b.getAttribute('data-off')==='all'){ clearAll(); return }
@@ -679,10 +691,11 @@ function roomUpdate(gen){
   var a=ST.a;
   if(!DATA[a]){
     $('grid').innerHTML=skel(12);
-    load(a).then(function(){ if(gen!==GEN) return; tidy(ST); writeUrl(false); roomUpdate(gen); syncItem() },
+    load(a).then(function(){ if(gen!==GEN) return; seen(a); tidy(ST); writeUrl(false); roomUpdate(gen); syncItem() },
       function(){ if(gen!==GEN) return; $('grid').innerHTML=''; $('empty').hidden=false; $('empty').innerHTML=errBox(a); $('rm').textContent='' });
     return;
   }
+  seen(a);
   LASTQ=filterKey();
   var d=DATA[a], p=P[a], F=ST.F;
   compute(a);
@@ -842,7 +855,7 @@ function savedUpdate(gen){
     if(!urls.length){ g.innerHTML=''; miss.hidden=true; return }
     if(!d){ g.innerHTML=FAIL[a]?errBox(a):skel(Math.min(4,urls.length)); miss.hidden=true; return }
     var have=[], lost=[];
-    urls.forEach(function(u){ var it=d.__byUrl[u]; if(it) have.push(it); else lost.push(u) });
+    urls.forEach(function(u){ var it=own.call(d.__byUrl,u)?d.__byUrl[u]:null; if(it) have.push(it); else lost.push(u) });
     have.sort(function(x,y){ var bx=m[x.l], by=m[y.l]; return String((by&&by.d)||'').localeCompare(String((bx&&bx.d)||'')) || y.k-x.k });
     SAVEDLIST=SAVEDLIST.concat(have);
     g.innerHTML=have.map(function(it,i){ return card(it,{change:true, eager:i<2}) }).join('');
@@ -925,12 +938,13 @@ function syncItem(){
   showDetail(it,false);
 }
 function openItem(it){
-  if(!it) return;
-  DV.pushed=true; ST.item=it.__k; writeUrl(true);
+  if(!it || DV.it===it) return;
+  ST.item=it.__k; DV.pushed=writeUrl(true);
   showDetail(it,true);
 }
 function showDetail(it,fromUi){
   var ov=$('ov'), dv=$('dv'), wasOpen=!!DV.it;
+  var stepF=wasOpen && doc.activeElement && doc.activeElement.getAttribute ? doc.activeElement.getAttribute('data-step') : null;
   if(!wasOpen) DV.ret=doc.activeElement;
   if(!fromUi && !wasOpen) DV.pushed=false;
   DV.it=it; DV.list=listFor(it); DV.idx=DV.list?DV.list.indexOf(it):-1;
@@ -942,7 +956,8 @@ function showDetail(it,fromUi){
   root.classList.add('lock');
   inert(true);
   requestAnimationFrame(function(){ ov.classList.add('open') });
-  var x=dv.querySelector('.dv-x'); if(x && (!wasOpen || !dv.contains(doc.activeElement))) x.focus({preventScroll:true});
+  var sb=stepF && dv.querySelector('[data-step="'+stepF+'"]:not([disabled])');
+  var x=sb || dv.querySelector('.dv-x'); if(x && (!wasOpen || !dv.contains(doc.activeElement))) x.focus({preventScroll:true});
   var info=dv.querySelector('.dv-info'); if(info) info.scrollTop=0;
   var pic=dv.querySelector('.dv-pic'); if(pic) pic.scrollTop=0;
   title();
@@ -1148,6 +1163,9 @@ $('drawer').addEventListener('click',function(e){ if(e.target.closest('[data-clo
 doc.addEventListener('click',function(e){
   if(e.defaultPrevented || e.button!==0) return;
   var mod=e.metaKey||e.ctrlKey||e.shiftKey||e.altKey;
+  var sk=e.target.closest('.skip,.skip2');
+  if(sk){ var tid=(sk.getAttribute('href')||'').replace(/^#/,''), tg=$(tid); if(tg){ e.preventDefault(); if(!tg.hasAttribute('tabindex')) tg.setAttribute('tabindex','-1'); tg.focus({preventScroll:true});
+      var y=tg.getBoundingClientRect().top+window.scrollY-(tid==='listH'?140:0); window.scrollTo(0,Math.max(0,y)) } return }
   var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry'); delete FAIL[ra]; refresh(); if(ST.view==='home') homeUpdate(GEN); return }
   var sv=e.target.closest('.card [data-save]'); if(sv){ var it=itemOfEl(sv); if(it) toggleSave(it); return }
   var sri=e.target.closest('[data-sri]');
@@ -1192,6 +1210,8 @@ function trap(e){
 if(WIDE.addEventListener) WIDE.addEventListener('change',function(){ root.classList.remove('lock-side'); var s=$('side'); if(s && WIDE.matches) s.classList.remove('open') });
 
 /* ---------------------------------------------------------------- start */
+// the page puts the reader back itself (keepPlace); the browser's own guess lands on the previous view's height
+try{ if('scrollRestoration' in history) history.scrollRestoration='manual' }catch(e){}
 savedUi();
 ST=readUrl(location.search);
 if(ST.view!=='room') writeUrl(false);
