@@ -400,6 +400,13 @@ function thumb(u,w){
     if(u.indexOf('i.ebayimg.com')>=0)            return u.replace(/\/s-l\d+\.(jpg|png|webp)/i,
       '/s-l'+(w<=160?225:w<=400?400:w<=800?500:1600)+'.$1');
     if(u.indexOf('images.vestiairecollective.com')>=0) return u.replace(/\bw=\d+/, 'w='+w);
+    // Mercari's list thumbnail is 240 px; the same photo at full size lives under /item/detail/orig/photos/
+    if(u.indexOf('static.mercdn.net/thumb/item/')>=0 && w>=600) return u.replace(/\/thumb\/item\/webp\/(m\d+_\d+)\.jpg/, '/item/detail/orig/photos/$1.jpg');
+    // Rakuma keeps a medium (m) and a large (l) copy of every photo; the large one only for the detail view
+    if(u.indexOf('img.fril.jp/img/')>=0 && w>=1000) return u.replace(/\/m\/(\d+\.jpg)/, '/l/$1');
+    // Yahoo's picture proxy (야후옥션 · 야후 플리마) scales to the w/h asked for: 300 · 600 · 1200, no square padding
+    if(u.indexOf('auc-pctr.c.yimg.jp/')>=0){ var W=w<=300?300:w<=600?600:1200;
+      return u.replace(/([?&])w=\d+/,'$1w='+W).replace(/([?&])h=\d+/,'$1h='+W).replace(/&(?:ccw|cch)=\d+/g,'').replace(/&fill=1\b/,'') }
   }catch(e){}
   return u;
 }
@@ -921,6 +928,9 @@ function thumb(u,w){
     if(u.indexOf('static.mercdn.net/thumb/item/')>=0 && w>=600) return u.replace(/\/thumb\/item\/webp\/(m\d+_\d+)\.jpg/, '/item/detail/orig/photos/$1.jpg');
     // Rakuma keeps a medium (m) and a large (l) copy of every photo; the large one only for the detail view
     if(u.indexOf('img.fril.jp/img/')>=0 && w>=1000) return u.replace(/\/m\/(\d+\.jpg)/, '/l/$1');
+    // Yahoo's picture proxy (야후옥션 · 야후 플리마) scales to the w/h asked for: 300 · 600 · 1200, no square padding
+    if(u.indexOf('auc-pctr.c.yimg.jp/')>=0){ var W=w<=300?300:w<=600?600:1200;
+      return u.replace(/([?&])w=\d+/,'$1w='+W).replace(/([?&])h=\d+/,'$1h='+W).replace(/&(?:ccw|cch)=\d+/g,'').replace(/&fill=1\b/,'') }
   }catch(e){}
   return u;
 }

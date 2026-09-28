@@ -133,7 +133,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     await p.keyboard.press('Escape'); await wait(p, 450);
     ok(/q=leather/.test(await qs(p)) && !/item=/.test(await qs(p)), 'closing leaves the search ' + (await qs(p)));
     await p.keyboard.press('/'); await p.fill('#sq', 'helmut lang'); await wait(p, 400);
-    ok(await p.evaluate(() => /브랜드 이름만/.test(document.getElementById('sres').textContent)), 'brand-only query explained');
+    ok(await p.evaluate(() => /브랜드 이름은 검색어로 쓰지 않음/.test(document.getElementById('sres').textContent)), 'brand-only query explained');
     await p.keyboard.press('Escape'); await wait(p, 300);
     ok(await p.evaluate(() => document.getElementById('search').hidden && document.activeElement.id === 'searchBtn'), 'escape closes search, focus back');
     ok(p.errs.length === 0, 'search: no errors ' + p.errs.join(' | '));
@@ -211,8 +211,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
       ok(/motif=/.test(await qs(p)) && await p.evaluate(() => document.getElementById('ov').hidden), 'motif tag filters the room: ' + lbl + ' ' + (await qs(p))) }
     const links = await p.evaluate(() => [...document.querySelectorAll('.seek a')].map((a) => a.href).filter((h) => !/^https:\/\//.test(h)));
     ok(links.length === 0, 'seek links are all https ' + links.join(' '));
-    const orig = await p.$eval('#orig', (a) => a.getAttribute('href'));
-    ok(/^\/helmut-lang\/\?/.test(orig) && /motif=/.test(orig), 'origin link carries the filter ' + orig);
+    ok(await p.evaluate(() => !document.getElementById('orig') && !/원본 인덱스/.test(document.body.textContent)), 'no second index to send the reader to');
     ok(p.errs.length === 0, 'place: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
 

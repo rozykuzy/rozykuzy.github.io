@@ -12,7 +12,8 @@ async function audit(p, name) {
 }
 (async () => {
   const b = await H.browser();
-  const go = async (url, vp, o, fn, name) => { const p = await H.page(b, vp, o); await p.goto(H.BASE + url); await H.ready(p); await p.waitForTimeout(400); if (fn) { await fn(p); await p.waitForTimeout(500) } await audit(p, name); await p.context().close() };
+  // audited in the final state (reduced motion): cards mid-arrival are transparent and would read as low contrast
+  const go = async (url, vp, o, fn, name) => { const p = await H.page(b, vp, Object.assign({ reduced: true }, o || {})); await p.goto(H.BASE + url); await H.ready(p); await p.waitForTimeout(400); if (fn) { await fn(p); await p.waitForTimeout(500) } await audit(p, name); await p.context().close() };
   const D = { width: 1440, height: 900 }, M = { width: 390, height: 844 }, MO = { mobile: true, dpr: 2 };
   await go('/', D, {}, null, 'home desktop');
   await go('/?archive=hl', D, {}, null, 'hl room');
