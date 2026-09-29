@@ -196,8 +196,8 @@ html.hide-top .top{transform:translate3d(0,-100%,0)}
 .tile:nth-child(n+9){display:none}
 .tile:nth-child(3n+1){--f:.12}.tile:nth-child(3n+2){--f:.24}.tile:nth-child(3n){--f:.36}
 
-.rooms{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;width:100%}
-.room{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;text-decoration:none;color:inherit;
+.rooms{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;width:100%;pointer-events:none}
+.room{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;text-decoration:none;color:inherit;pointer-events:auto;
   transition:opacity .5s var(--ease)}
 .room-no{font:400 10.5px/1 var(--mono);color:var(--soft);letter-spacing:.04em}
 .room-name{position:relative;display:block;font:400 clamp(44px,min(11.4vw,calc((100svh - var(--topH) - var(--stripH)) * .09)),64px)/.94 var(--serif);letter-spacing:-.012em;white-space:nowrap}
@@ -217,7 +217,7 @@ html.hide-top .top{transform:translate3d(0,-100%,0)}
 .fx .room.r-ccp.in{transition-delay:.12s}
 .fx .hero[data-focus] .room.in{opacity:.2;transition-delay:0s}
 .fx .hero[data-focus="hl"] .room.r-hl.in,.fx .hero[data-focus="ccp"] .room.r-ccp.in{opacity:1}
-.hero-d{position:absolute;left:var(--X);right:var(--X);bottom:22px;z-index:2;display:flex;justify-content:center;
+.hero-d{position:absolute;left:var(--X);right:var(--X);bottom:22px;z-index:2;display:flex;justify-content:center;pointer-events:none;
   font:400 10.5px/1.4 var(--mono);color:var(--soft);letter-spacing:.02em;text-align:center}
 
 /* ---------------------------------------------------------------- sections on the home page */
