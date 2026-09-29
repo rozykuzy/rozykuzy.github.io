@@ -34,15 +34,17 @@ const list = process.argv.slice(2);
     'home-1366': ['/', { width: 1366, height: 768 }, {}],
     'home-2560': ['/', { width: 2560, height: 1440 }, {}],
     'home-375': ['/', { width: 375, height: 667 }, { mobile: true, dpr: 2 }],
-    'home-side-740': ['/', { width: 740, height: 360 }, { mobile: true, dpr: 2 }],
-    'home-side-844': ['/', { width: 844, height: 390 }, { mobile: true, dpr: 2 }],
+    'menu-390': ['/', { width: 390, height: 844 }, { mobile: true, dpr: 2 }, async (p) => { await p.click('#menuBtn') }],
+    'saved-1440': ['/?view=saved', { width: 1440, height: 900 }, { storage: { 'hlx.saved': JSON.stringify({ 'https://www.grailed.com/listings/102614695': { k: 1, p: 1, u: 'USD', d: '2026-09-27', g: 0 } }) } }],
+    'nf-1440': ['/nope', { width: 1440, height: 900 }, {}],
+    'home-full-1440': ['/', { width: 1440, height: 900 }, { full: true }],
   };
   for (const k of Object.keys(jobs)) {
     if (list.length && !list.includes(k)) continue;
     const [u, vp, o, fn] = jobs[k];
     const p = await H.page(b, vp, o); await p.goto(H.BASE + u); await H.ready(p); await p.waitForTimeout(1700);
     if (fn) { await fn(p); await p.waitForTimeout(1500) }
-    await p.screenshot({ path: 'shots/' + k + '.png' });
+    await p.screenshot({ path: 'shots/' + k + '.png', fullPage: !!o.full });
     if (p.errs.length) console.log(k, p.errs);
     const csp = await p.evaluate(() => window.__csp || []); if (csp.length) console.log(k, 'CSP', csp);
     await p.context().close();

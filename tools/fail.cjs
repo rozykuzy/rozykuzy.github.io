@@ -3,7 +3,7 @@ const H = require('./harness.cjs');
   const b = await H.browser();
   let p = await H.page(b, { width: 1440, height: 900 });
   await p.goto('http://127.0.0.1:8931/'); await H.ready(p); await p.waitForTimeout(600);
-  console.log('home with HL down:', JSON.stringify(await p.evaluate(() => ({ hl: document.getElementById('st-hl').textContent, ccp: document.getElementById('st-ccp').textContent.slice(0, 30), today: document.querySelectorAll('#tgrid .card').length, todayTxt: document.getElementById('tgrid').textContent.slice(0, 40), strip: document.getElementById('strip').textContent }))));
+  console.log('home with HL down:', JSON.stringify(await p.evaluate(() => ({ hl: document.getElementById('st-hl').textContent, ccp: document.getElementById('st-ccp').textContent.slice(0, 30), today: document.querySelectorAll('#tgrid .card').length, todayTxt: document.getElementById('tgrid').textContent.slice(0, 40), rooms: document.querySelectorAll('.room-ph img').length }))));
   await p.screenshot({ path: 'shots/fail-home.png' });
   await p.goto('http://127.0.0.1:8931/?archive=hl'); await H.ready(p); await p.waitForTimeout(600);
   console.log('room with HL down:', JSON.stringify(await p.evaluate(() => ({ err: (document.querySelector('.err') || {}).textContent, grid: document.querySelectorAll('#grid .card').length, rm: document.getElementById('rm').textContent }))));

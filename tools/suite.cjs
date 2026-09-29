@@ -13,11 +13,14 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
   { console.log('home'); const p = await H.page(b, { width: 1440, height: 900 });
     await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 400);
     const r = await p.evaluate(() => ({ st: [...document.querySelectorAll('.room-stat')].map((e) => e.textContent), today: document.querySelectorAll('#tgrid .card').length,
-      tags: document.querySelectorAll('#tgrid .at').length, strip: document.querySelectorAll('#strip a').length, mos: document.querySelectorAll('.col .tile img').length }));
+      tags: document.querySelectorAll('#tgrid .at').length, shown: [...document.querySelectorAll('#tgrid .card')].filter((c) => c.offsetParent).length,
+      cols: getComputedStyle(document.getElementById('tgrid')).gridTemplateColumns.split(' ').length, mos: document.querySelectorAll('.room-ph img').length,
+      rooms: [...document.querySelectorAll('.rooms .room')].map((a) => a.getAttribute('href')) }));
     ok(r.st.every((t) => /매물/.test(t)), 'home: both rooms have stats ' + JSON.stringify(r.st));
     ok(r.today > 0 && r.tags === r.today, 'home: today grid with archive tags ' + r.today + '/' + r.tags);
-    ok(r.strip === 2, 'home: strip links 2 → ' + r.strip);
-    ok(r.mos >= 6, 'home: photographs around the names ' + r.mos);
+    ok(r.shown > 0 && r.shown % r.cols === 0 || r.shown === r.today, 'home: today shows whole rows ' + r.shown + ' in ' + r.cols + ' columns');
+    ok(r.mos === 6, 'home: three photographs for each archive ' + r.mos);
+    ok(r.rooms.join() === '/?archive=hl,/?archive=ccp', 'home: the two archives link to their rooms ' + r.rooms.join());
     await p.click('.room.r-ccp'); await wait(p, 700);
     ok((await qs(p)) === '?archive=ccp', 'home → ccp room url ' + (await qs(p)));
     ok(await p.evaluate(() => document.documentElement.dataset.room === 'ccp'), 'ccp palette');
