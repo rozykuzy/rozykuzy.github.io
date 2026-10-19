@@ -38,11 +38,11 @@
     <button class="ico mbtn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="drawer">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6.5h18M3 12h18M3 17.5h18" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
     </button>
-    <nav class="arch" aria-label="Primary">
+    <nav class="arch" id="arch" aria-label="Primary">
       <a href="/?view=new" data-nav="new">New in</a>
-      <a href="/?archive=hl" data-nav="hl">Helmut Lang</a>
-      <a href="/?archive=ccp" data-nav="ccp"><span class="nm-l">Carol Christian Poell</span><span class="nm-s" aria-hidden="true">CCP</span></a>
-      <a href="/?view=brands" data-nav="brands">Brands</a>
+      <div class="mm"><a href="/?archive=hl" data-nav="hl">Helmut Lang</a><div class="mm-p" id="mm-hl"></div></div>
+      <div class="mm"><a href="/?archive=ccp" data-nav="ccp"><span class="nm-l">Carol Christian Poell</span><span class="nm-s" aria-hidden="true">CCP</span></a><div class="mm-p" id="mm-ccp"></div></div>
+      <div class="mm"><a href="/?view=brands" data-nav="brands">Brands</a><div class="mm-p" id="mm-brands"></div></div>
     </nav>
     <a class="wm" href="/" data-nav="home">Archive Index</a>
     <div class="utl">

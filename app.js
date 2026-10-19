@@ -616,8 +616,36 @@ function dropsUpdate(gen){
   l.innerHTML=DROPLIST.map(function(it){ return card(it,{tag:true}) }).join('');
   bindImgs(l); box.hidden=false;
 }
+/* ---------------------------------------------------------------- the menu's panels (a wide screen with a mouse):
+   under an archive its kinds and a few ways in, under Brands the names */
+function megaMenus(){
+  AS.forEach(function(a){
+    var el=$('mm-'+a); if(!el || el.__done) return; el.__done=1;
+    var p=P[a], A=ARCH[a];
+    var cats=p.CATORDER.map(function(c){ return '<li><a href="/?archive='+a+'&amp;category='+encodeURIComponent(p.CATSLUG[c]||c)+'">'+esc(catEn(c))+'<span class="n" data-mmc="'+a+'|'+esc(c)+'"></span></a></li>' }).join('');
+    var ways=[['New today','show=new','new'],['Price drops','show=drop&amp;sort=drop','drop'],['Sold records','show=sold','sold'],['Year old to new','sort=y%2B','']].map(function(w){
+      return '<li'+(w[2]==='sold'?' data-mms="'+a+'"':'')+'><a href="/?archive='+a+'&amp;'+w[1]+'">'+esc(w[0])+(w[2]?'<span class="n" data-mmw="'+a+'|'+w[2]+'"></span>':'')+'</a></li>' }).join('');
+    el.innerHTML='<div class="mm-in"><div class="mm-c"><p class="mm-h">Category</p><ul class="mm-l two">'+cats+'</ul></div>'+
+      '<div class="mm-c"><p class="mm-h">Show</p><ul class="mm-l">'+ways+'</ul></div>'+
+      '<div class="mm-c mm-e"><a class="mm-all" href="/?archive='+a+'">All '+esc(A.name)+'<span class="n" data-mmw="'+a+'|all"></span></a></div></div>';
+  });
+  var b=$('mm-brands');
+  if(b && !b.__done){ b.__done=1;
+    b.innerHTML='<div class="mm-in"><div class="mm-c"><p class="mm-h">A–Z</p><ul class="mm-l">'+brandList().map(function(x){ return '<li><a href="'+x.href+'">'+esc(x.name)+'<span class="n" data-mmw="'+x.a+'|all"></span></a></li>' }).join('')+'</ul></div>'+
+      '<div class="mm-c mm-e"><a class="mm-all" href="/?view=brands">All brands</a></div></div>' }
+}
+function megaCounts(a){
+  var d=DATA[a]; if(!d || d.__mm) return; d.__mm=1;
+  var byCat={}; d.items.forEach(function(it){ if(!it.x && !it.so && !it.__bad) byCat[it.s]=(byCat[it.s]||0)+1 });
+  var n=doc.querySelectorAll('[data-mmc^="'+a+'|"]'); for(var i=0;i<n.length;i++){ var c=n[i].getAttribute('data-mmc').slice(a.length+1); n[i].textContent=byCat[c]?won(byCat[c]):'' }
+  var drops=0; d.items.forEach(function(it){ if(!it.x && !it.so && !it.__bad && it.w>it.k && it.k>0) drops++ });
+  var w={'new':d.__allnew?0:d.__fresh, drop:drops, sold:d.__sold, all:d.__cards};
+  var m=doc.querySelectorAll('[data-mmw^="'+a+'|"]'); for(var j=0;j<m.length;j++){ var k=m[j].getAttribute('data-mmw').slice(a.length+1); m[j].textContent=w[k]?won(w[k]):'' }
+  var s=doc.querySelector('[data-mms="'+a+'"]'); if(s) s.hidden=!d.__sold;
+}
 function drawerMeta(){
   var dm={hl:$('dmHl'), ccp:$('dmCcp')};
+  AS.forEach(function(a){ if(DATA[a]) megaCounts(a) });
   AS.forEach(function(a){ if(dm[a] && DATA[a]) dm[a].textContent=won(DATA[a].__cards) });
   var nw=$('dmNew'); if(nw && AS.every(function(a){ return DATA[a] })){ var n=0; AS.forEach(function(a){ n+=DATA[a].__fresh||0 }); nw.textContent=n?won(n):'' }
 }
@@ -628,6 +656,7 @@ function newShell(){
   return '<section class="vh"><h1 id="vh" tabindex="-1">New in</h1><p class="rm" id="nwm"><span class="sk w40"></span></p></section>'+
     '<div class="vtabs"><div class="tabs" id="newT" role="group" aria-label="Archive"></div></div>'+
     '<div class="body"><div class="res">'+
+      '<h2 class="sr">Listings</h2>'+
       '<div class="grid" id="ngrid">'+skel(8)+'</div>'+
       '<div class="more" id="nmore" hidden><button type="button" class="btn" id="nmoreBtn">Load more</button></div>'+
     '</div></div>';
@@ -1460,6 +1489,13 @@ function openDrawer(){ var d=$('drawer'); d.hidden=false; root.classList.add('lo
 function closeDrawer(silent){ var d=$('drawer'); if(d.hidden) return; d.classList.remove('open'); root.classList.remove('lock'); $('menuBtn').setAttribute('aria-expanded','false');
   var fin=function(){ if(!d.classList.contains('open')) d.hidden=true }; if(REDUCED.matches) fin(); else setTimeout(fin,360); if(!silent) $('menuBtn').focus() }
 $('menuBtn').addEventListener('click',openDrawer);
+(function(){ var ar=$('arch'); if(!ar) return;
+  var on=function(){ ar.classList.remove('mm-off'); ar.__esc=null };
+  ar.addEventListener('mouseleave',on);
+  // closed with Escape: open again when focus moves to another item or leaves the menu (a click waits for the pointer to leave)
+  ar.addEventListener('focusin',function(e){ var m=e.target.closest && e.target.closest('.mm'); if(ar.__esc && m!==ar.__esc) on() });
+  ar.addEventListener('focusout',function(e){ if(ar.__esc && !ar.contains(e.relatedTarget)) on() });
+})();
 $('drawer').addEventListener('click',function(e){ if(e.target.closest('[data-close]')) closeDrawer() });
 
 /* ---------------------------------------------------------------- clicks, keys */
@@ -1469,6 +1505,7 @@ doc.addEventListener('click',function(e){
   var sk=e.target.closest('.skip,.skip2');
   if(sk){ var tid=(sk.getAttribute('href')||'').replace(/^#/,''), tg=$(tid); if(tg){ e.preventDefault(); if(!tg.hasAttribute('tabindex')) tg.setAttribute('tabindex','-1'); tg.focus({preventScroll:true});
       var y=tg.getBoundingClientRect().top+window.scrollY-(tid==='listH'?140:0); window.scrollTo(0,Math.max(0,y)) } return }
+  var mmp=e.target.closest('.mm-p'); if(mmp){ var ar0=$('arch'); if(ar0) ar0.classList.add('mm-off'); if(doc.activeElement && mmp.contains(doc.activeElement)) doc.activeElement.blur() }
   var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry'); delete FAIL[ra]; refresh(); if(ST.view==='home') homeUpdate(GEN); return }
   var tt=e.target.closest('[data-tt]'); if(tt){ TODAYTAB=tt.getAttribute('data-tt'); var tb=$('todayT').querySelectorAll('[data-tt]');
     for(var ti=0;ti<tb.length;ti++) tb[ti].setAttribute('aria-pressed',String(tb[ti]===tt)); todayPaint(); return }
@@ -1494,6 +1531,8 @@ doc.addEventListener('click',function(e){
 doc.addEventListener('keydown',function(e){
   var t=e.target, tag=(t.tagName||'').toLowerCase(), typing=tag==='input'||tag==='textarea'||tag==='select'||t.isContentEditable;
   if(e.key==='Escape'){
+    var ar=$('arch'), mmx=ar && doc.activeElement && doc.activeElement.closest && doc.activeElement.closest('.mm');
+    if(mmx && ar.contains(mmx)){ e.preventDefault(); ar.classList.add('mm-off'); ar.__esc=mmx; mmx.querySelector('a').focus(); return }
     if(!$('search').hidden){ e.preventDefault(); closeSearch(); return }
     if(DV.it){ e.preventDefault(); closeByUser(); return }
     if(!$('drawer').hidden){ e.preventDefault(); closeDrawer(); return }
@@ -1567,6 +1606,7 @@ topScroll();
 // the page puts the reader back itself (keepPlace); the browser's own guess lands on the previous view's height
 try{ if('scrollRestoration' in history) history.scrollRestoration='manual' }catch(e){}
 savedUi();
+megaMenus();
 ST=readUrl(location.search);
 if(ST.view!=='room') writeUrl(false);
 if(ST.view==='home'){ AS.forEach(function(a){ load(a).catch(function(){}) }) }

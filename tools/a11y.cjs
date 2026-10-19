@@ -27,5 +27,9 @@ async function audit(p, name) {
   await go('/?archive=hl', M, MO, async (p) => p.click('#ftog'), 'filter sheet phone');
   await go('/', M, MO, async (p) => p.click('#menuBtn'), 'menu phone');
   await go('/nope', D, {}, null, '404');
+  await go('/?view=new', D, {}, null, 'new in');
+  await go('/?view=brands', D, {}, null, 'brands');
+  await go('/?archive=hl', D, {}, async (p) => p.click('#ftog'), 'filter drawer desktop');
+  await go('/?archive=ccp', D, {}, async (p) => p.hover('.arch .mm:nth-of-type(1) > a'), 'menu panel');
   await b.close();
 })();
