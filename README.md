@@ -51,6 +51,28 @@ Helmut Lang(1986–2005)과 Carol Christian Poell 두 아카이브, 그리고 �
   화면 한글이 바뀌면 `python3 tools/fontsubset.py --check` 로 빠진 글자 0 확인(2026-10-19: 302자, 0)
 - **움직임** `html.fx`(동작 줄이기를 켜지 않은 경우) 아래에서만: 사진이 나타남, 카드에 올리면 두 번째 사진, 아카이브 사진 1.03배, 분류 밑줄,
   서랍 · 메뉴 · 검색 판이 들어옴(.35초), 저장 표시, 상세로 가는 사진. 도착 연출 · 반복 없음. 동작 줄이기면 모두 제자리
+- **v6 (2026-10-19, 전체 점검 뒤)** 디자인 · 접근성 · 성능/SEO · 코드/보안 네 갈래 점검(design-critique · design-system · accessibility-review ·
+  modern-web-guidance · performance-optimization · technical-seo · code-review · security-and-hardening)에서 나온 것을 고친 판.
+  - **데이터가 화면을 깨지 못하게** 매물의 `__` 칸은 데이터에서 오지 않는다(지움) · 통화는 대문자 세 글자만 · `v`(같은 상품명)는 객체만 · `h`(가격 변동)는 점의 목록만 ·
+    `sources` 는 목록만 · 사진은 `okUrl` 을 지난 것만 센다 · 상세는 먼저 그려 보고 안 되면 열지 않는다(주소에서 item 지움).
+    브랜드의 두 자리 시즌이 내년보다 늦은 연도로 읽히면(AW88 → 2088) 연도를 정하지 않는다(시즌 표기는 그대로)
+  - **불러오기** 요청마다 30초 한도 · 네트워크 실패와 5xx는 한 번 더 · 404만 "없음". 브랜드 색인을 못 읽으면(404 말고) 브랜드 주소는 그대로 두고
+    `Brands · Could not load` + Retry(전에는 A–Z로 바뀌었다). 브랜드 방을 떠나면 그 파일 내려받기를 멈춘다. 브랜드 방 주소로 열면 그 파일을 색인과 같이 요청.
+    3,000개 넘는 브랜드 파일은 50ms씩 나눠 읽는다. 최근 8개 브랜드 방만 메모리에 둔다(저장 화면에서는 비우지 않음)
+  - **다운로드** 브랜드 방 · A–Z는 두 아카이브를 받지 않는다(A–Z 사진은 브랜드 색인 `ph`). 아카이브 방에서는 다른 아카이브 페이지를 낮은 우선순위로 캐시에만 받아 둔다.
+    저장 화면은 저장한 매물이 있는 아카이브만 읽는다. 저장 화면 · New in은 다운로드마다 한 번만 기다리고 한 프레임에 한 번만 다시 그린다(브랜드 9곳 3,585번 → 10번)
+  - **화면 흔들림(CLS 0.5–0.66 → 0.00x)** 기다리는 카드가 카드 크기 · `main` 최소 높이 · 분류 줄 49px · 개수 칸 96px · 처음 화면 Brands 자리 · 사진 띠 0.15초
+  - **검색** 브랜드 이름 + 다른 말(`guidi boots` · `リックオウエンス ジャケット` · `グイディブーツ`)은 그 브랜드 방에서 나머지 말로(`/?brand=guidi&q=boots`).
+    이름만이면 Brands에서 그 이름. "Brand names are not search terms" 문장 없앰. Enter는 브랜드가 먼저. 스크린 리더에는 짧은 한 줄(`#sStat`)
+  - **처음 화면** 두 아카이브 → New today(탭에 Brands, All에 포함, 폰은 HL · CCP 글자) → Brands(폰 2개) → Price drops. 구역 이름과 같은 표시(NEW · PRICE DROP)는 카드에서 뺌
+  - **Brands** 메뉴 판은 방이 있는 이름만 + `All brands 132`. A–Z에 All / Listed(주소에 남기지 않음). 매물 없는 브랜드 주소는 A–Z의 그 이름으로(밑줄)
+  - **상세** 분류 · 표기 영어(`catEn` · `markEn`), 브랜드 줄은 그 방으로 가는 링크(그 방 안에서는 글자만), 연도 없음은 한 말 `연도 미확인`
+  - **키보드 · 스크린 리더** 다시 그려도 포커스가 제자리(분류 · 토큰 · Remove · 탭 · 저장) · 검색칸 Enter는 목록으로 · 필터 서랍은 dialog, 뒤는 inert(검색 · 메뉴도) ·
+    동작 줄이기에서도 서랍이 바로 포커스 · 상세 Tab이 접힌 칸까지 · 이동은 `#live` 한 줄 · 닫으면 마지막에 연 매물 카드로 · Load more는 새 첫 매물로(한 번 누른 뒤부터만 자동) ·
+    영어 UI에 `lang="en"` · 지운 가격은 "was" · 사진 띠 위 글 대비(어둡게 .56) · 처음 화면 방 링크 포커스 링 · 체크 상자 테두리 `--dim`
+  - **SEO** 고정 canonical 지움(스크립트가 화면마다 씀) · 화면마다 description · Saved는 noindex · WebSite JSON-LD · sitemap에 Brands · New in · robots `Disallow: /tools/` ·
+    `referrer no-referrer` · 한글 글꼴 preload 낮은 우선순위 · manifest theme_color #000
+  - 검사: `tools/suite_v6.cjs`(64) — 위 항목을 픽스처를 바꿔 끼워 확인(가짜 통화 · 구멍 난 offers · 503 색인 · 큰 브랜드 6,800개 · 브랜드 9곳 저장 · 10개 방 메모리 · 떠날 때 멈춤)
 - **배포** 빌드 단계 없음. `main` 브랜치 루트가 그대로 GitHub Pages로 나간다.
 
 | 파일 | 하는 일 |
@@ -61,7 +83,7 @@ Helmut Lang(1986–2005)과 Carol Christian Poell 두 아카이브, 그리고 �
 | `engine.js` | 읽는 규칙 (생성 파일, 손으로 고치지 않는다) |
 | `404.html` | 없는 주소 |
 | `fonts/` | Figtree · Index Sans와 두 라이선스 |
-| `tools/` | engine.js 생성 · 글꼴 자르기 · 로컬 미리보기 · 브라우저 검증 (`fixtures/`에 두 브랜드 페이지를 받아 두고 돌린다: suite · suite_fx · a11y · keys · since · fail · dvbar · perf · shots5 · shots_brands · samecheck) |
+| `tools/` | engine.js 생성 · 글꼴 자르기 · 로컬 미리보기 · 브라우저 검증 (`fixtures/`에 두 브랜드 페이지를 받아 두고 돌린다: suite · suite_v6 · suite_fx · a11y · keys · since · fail · dvbar · perf · shots5 · shots_brands · samecheck) |
 | `tools/brandfix.mjs` | 브랜드 테스트 자료 `fixtures/BRAND/` — CCP 픽스처의 매물을 세 브랜드(rick-owens · guidi · uma-wang)로 바꿔 단 것 + 131개 색인 + new.json. 발행하지 않는다 |
 
 로컬 검증(`fixtures/` 는 저장소에 없다 — 받거나 만든다):
@@ -69,7 +91,7 @@ Helmut Lang(1986–2005)과 Carol Christian Poell 두 아카이브, 그리고 �
 ```
 node tools/brandfix.mjs ../brand/brands.json        # fixtures/BRAND (브랜드 등록부 경로)
 cd tools && node serve.mjs                          # 8930: /helmut-lang/ · /ccp/ · /BRAND/ 픽스처. BRAND=off → /BRAND/ 404 · FAIL=hl,ccp,brand → 503
-node suite.cjs && node suite_fx.cjs && node a11y.cjs  # suite 는 BRAND=off 서버를 스스로 하나 더 띄운다
+node suite.cjs && node suite_v6.cjs && node suite_fx.cjs && node a11y.cjs  # suite · suite_v6 는 필요한 서버(BRAND=off · FAIL=brand · SLOW)를 스스로 더 띄운다
 PORT=8931 FAIL=hl node serve.mjs & PORT=8932 SLOW=2500 node serve.mjs & node fail.cjs
 ```
 

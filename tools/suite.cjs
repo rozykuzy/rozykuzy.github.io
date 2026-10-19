@@ -143,10 +143,13 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     ok(await p.evaluate(() => !document.getElementById('ov').hidden), 'detail shown');
     await p.keyboard.press('Escape'); await wait(p, 450);
     ok(/q=leather/.test(await qs(p)) && !/item=/.test(await qs(p)), 'closing leaves the search ' + (await qs(p)));
+    const opener = await p.evaluate(() => { const a = document.activeElement; a.setAttribute('data-was', '1'); return a.tagName });
     await p.keyboard.press('/'); await p.fill('#sq', 'helmut lang'); await wait(p, 400);
-    ok(await p.evaluate(() => /Brand names are not search terms/.test(document.getElementById('sres').textContent)), 'brand-only query explained');
+    const bo = await p.evaluate(() => ({ brands: [...document.querySelectorAll('.sr-bg a.sr-bi')].map((a) => a.getAttribute('href')), groups: document.querySelectorAll('.sr-g:not(.sr-bg)').length,
+      words: /not search terms/i.test(document.getElementById('sres').textContent), stat: document.getElementById('sStat').textContent }));
+    ok(bo.brands[0] === '/?archive=hl' && bo.groups === 0 && !bo.words && /brand/i.test(bo.stat), 'a query that is only a name: the name under Brands, no sentence ' + JSON.stringify(bo));
     await p.keyboard.press('Escape'); await wait(p, 300);
-    ok(await p.evaluate(() => document.getElementById('search').hidden && document.activeElement.id === 'searchBtn'), 'escape closes search, focus back');
+    ok(await p.evaluate(() => document.getElementById('search').hidden && document.activeElement.hasAttribute('data-was')), 'escape closes search, focus back to what opened it (' + opener + ')');
     ok(p.errs.length === 0, 'search: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
 
@@ -300,7 +303,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     const nq = await count(p);
     ok((await qs(p)) === '?brand=guidi&category=outer&q=jacket' && await p.$eval('#sort', (s) => s.value) === 'rel' && nq > 0 && nq < tabN, 'brand room search ' + nq);
     for (const w of ['guidi', 'グイディ', '구이디']) { await p.fill('#rq', w); await wait(p, 450);
-      ok(/Brand names are not search terms/.test(await p.$eval('#crng', (e) => e.textContent)), 'the brand\'s own name is not a search term: ' + w) }
+      ok(await count(p) === tabN && !/not search terms/i.test(await p.$eval('#crng', (e) => e.textContent)), 'the brand\'s own name is not a search term (everything stays, no sentence): ' + w) }
     await p.fill('#rq', ''); await wait(p, 450);
     const seekL = await p.evaluate(() => [...document.querySelectorAll('.seek a')].map((a) => decodeURIComponent(a.href)));
     ok(seekL.length > 10 && seekL.every((h) => /^https:\/\//.test(h) && !/carol|poell|ポエル|포엘|キャロル/i.test(h)) && seekL.some((h) => /yahoo\.co\.jp.*グイディ/.test(h)) &&
@@ -357,7 +360,12 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     ok(z.li.filter((x) => x.href).length === 2 + live.length && z.li.filter((x) => !x.href).every((x) => x.n === null), 'links and counts only where there are listings: ' + z.li.filter((x) => x.href).map((x) => x.href).join(' '));
     ok(live.every((x) => z.li.some((l) => l.href === '/?brand=' + x.s && +l.n.replace(/,/g, '') === x.c)), 'brand counts from the index');
     const ccp = z.li.filter((x) => /^carol christian poell$/i.test(x.name)), hl = z.li.find((x) => x.name === 'Helmut Lang');
-    ok(ccp.length === 1 && ccp[0].href === '/?archive=ccp' && hl.href === '/?archive=hl' && +ccp[0].n.replace(/,/g, '') > 1000, 'the two archives, once each, with their own counts');
+    ok(ccp.length === 1 && ccp[0].href === '/?archive=ccp' && hl.href === '/?archive=hl', 'the two archives, once each');
+    // the list needs neither archive: it does not download them (their counts come when they are here anyway)
+    ok(await p.evaluate(() => !performance.getEntriesByType('resource').some((r) => /\/(helmut-lang|ccp)\/$/.test(new URL(r.name).pathname)) && !document.getElementById('azn-ccp').textContent), 'A–Z asks for no archive');
+    ok(await p.evaluate(() => document.querySelectorAll('#azph img').length === 2 && [...document.querySelectorAll('#azph img')].every((i) => /^https:/.test(i.getAttribute('src')))), 'A–Z photographs from the brand index');
+    await p.click('.wm'); await wait(p, 900); await H.ready(p); await p.click('.arch a[data-nav="brands"]'); await wait(p, 900);
+    ok(await p.evaluate(() => +document.getElementById('azn-ccp').textContent.replace(/,/g, '') > 1000 && +document.getElementById('azn-hl').textContent.replace(/,/g, '') > 1000), 'the archives\' counts once they are here');
     ok(z.groups.every((g) => g[1].every((n) => (g[0] === '#' ? /^[^a-z]/i.test(n) : n.normalize('NFKD').charAt(0).toUpperCase() === g[0]))) &&
       z.groups.every((g) => g[1].every((n, i) => !i || g[1][i - 1].localeCompare(n, 'en', { sensitivity: 'base' }) <= 0)) && z.letters.startsWith('#A'), 'A–Z order, figures under # ' + z.letters);
     await p.click('.az-l a[data-az="U"]'); await wait(p, 300);
@@ -378,7 +386,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
         return { vis: getComputedStyle(pan).visibility, cols: ul && getComputedStyle(ul).columnCount, li: ul ? ul.querySelectorAll('li').length : 0, a: ul ? ul.querySelectorAll('a').length : 0,
           counts: ul ? [...ul.querySelectorAll('a[href^="/?brand="] .n')].filter((n) => /\d/.test(n.textContent)).length : 0, all: !!pan.querySelector('a.mm-all[href="/?view=brands"]'),
           fit: pan.getBoundingClientRect().bottom <= innerHeight + 1, over: document.documentElement.scrollWidth - innerWidth } });
-      ok(m.vis === 'visible' && m.cols === (w >= 1280 ? '6' : '5') && m.li === 132 && m.a === 5 && m.counts === 3 && m.all && m.fit, w + ': Brands panel ' + JSON.stringify(m));
+      ok(m.vis === 'visible' && m.cols === (w >= 1280 ? '6' : '5') && m.li === 5 && m.a === 5 && m.counts === 3 && m.all && m.fit && /132/.test(await p.$eval('#mm-brands a.mm-all', (a) => a.textContent)), w + ': Brands panel: the names that open a room, All brands 132 ' + JSON.stringify(m));
       await p.focus('.arch a[data-nav="brands"]'); await p.keyboard.press('Escape'); await wait(p, 300);
       ok(await p.evaluate(() => getComputedStyle(document.getElementById('mm-brands')).visibility === 'hidden'), w + ': Escape closes the panel');
       await p.mouse.move(700, 600); await wait(p, 200); await p.hover('.arch a[data-nav="brands"]'); await wait(p, 500);
@@ -411,11 +419,11 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
   { console.log('home brands row'); const p = await H.page(b, { width: 1440, height: 900 });
     await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 400);
     const idx = await getIdx(p), act = idx.brands.filter((x) => !x.ex && x.nw > 0 && x.nw < x.c).sort((x, y) => y.nw - x.nw);
-    const r = await p.evaluate(() => ({ hidden: document.getElementById('bros').hidden, after: document.querySelector('.rooms').nextElementSibling.id,
+    const r = await p.evaluate(() => ({ hidden: document.getElementById('bros').hidden, after: document.getElementById('today').nextElementSibling.id,
       tiles: [...document.querySelectorAll('#bgrid .bt')].map((a) => [a.getAttribute('href'), a.querySelector('.bt-n').textContent, a.querySelector('.bt-s').textContent, !!a.querySelector('.ph img')]),
       all: document.querySelector('#bros .sec-more a').getAttribute('href') }));
-    ok(!r.hidden && r.after === 'bros' && r.all === '/?view=brands', 'a Brands row under the two archives, with All brands ' + JSON.stringify(r));
-    ok(r.tiles.length === Math.min(4, act.length) && r.tiles.every((x, i) => x[0] === '/?brand=' + act[i].s + '&show=new' && x[1] === act[i].n && x[2] === 'New' + act[i].nw && x[3]), 'the brands with the most new listings, a photograph each ' + JSON.stringify(r.tiles));
+    ok(!r.hidden && r.after === 'bros' && r.all === '/?view=brands', 'a Brands row under New today, with All brands ' + JSON.stringify(r));
+    ok(r.tiles.length === Math.min(4, act.length) && r.tiles.every((x, i) => x[0] === '/?brand=' + act[i].s + '&show=new' && x[1] === act[i].n && x[2].replace(/\s+/g, '') === 'New' + act[i].nw && x[3]), 'the brands with the most new listings, a photograph each ' + JSON.stringify(r.tiles));
     await p.click('#bgrid .bt'); await wait(p, 900);
     ok((await qs(p)) === '?brand=' + act[0].s + '&show=new' && await count(p) === act[0].nw, 'a tile opens the brand\'s new listings ' + (await qs(p)));
     ok(p.errs.length === 0, 'home brands: no errors ' + p.errs.join(' | '));
@@ -439,7 +447,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     const hits = async (w) => { await p.fill('#sq', w); await wait(p, 450); return p.evaluate(() => [...document.querySelectorAll('.sr-bg a.sr-bi')].map((a) => a.getAttribute('href') + ' ' + a.querySelector('.sr-t').textContent)) };
     await p.keyboard.press('/'); await wait(p, 300);
     let h = await hits('guidi');
-    ok(h.length === 1 && h[0] === '/?brand=guidi Guidi' && await p.evaluate(() => document.querySelectorAll('.sr-g').length === 3 && !document.querySelector('.sr-g:not(.sr-bg) a.sr-i')), 'search finds the brand name, no item search across brands ' + h);
+    ok(h.length === 1 && h[0] === '/?brand=guidi Guidi' && await p.evaluate(() => document.querySelectorAll('.sr-g').length === 1 && !document.querySelector('.sr-g:not(.sr-bg) a.sr-i')), 'search finds the brand name, no item search across brands ' + h);
     for (const w of ['リックオウエンス', '릭오웬스', 'rickowens', 'RICK-OWENS', 'owens']) { h = await hits(w); ok(h[0] === '/?brand=rick-owens Rick Owens', 'brand by another spelling: ' + w + ' → ' + h) }
     h = await hits('helmut'); ok(h.length === 1 && h[0] === '/?archive=hl Helmut Lang', 'the archives are brands too ' + h);
     h = await hits('leather'); ok(h.length === 0 && await p.evaluate(() => document.querySelectorAll('.sr-g').length === 2), 'no brand group without a brand name');
@@ -473,8 +481,9 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     await p.click('.arch a[data-nav="ccp"]'); await wait(p, 900); await H.ready(p);
     await p.fill('#rq', 'drip'); await wait(p, 450);
     ok(await count(p) === CCPDRIP, 'CCP drip count unchanged after a brand room ' + CCPDRIP);
+    await p.fill('#rq', ''); await wait(p, 450); const all = await count(p);
     await p.fill('#rq', 'ccp'); await wait(p, 450);
-    ok(/Brand names are not search terms/.test(await p.$eval('#crng', (e) => e.textContent)), 'CCP noise words are CCP\'s');
+    ok(await count(p) === all, 'CCP noise words are CCP\'s (the whole room stays) ' + all);
     await p.fill('#rq', ''); await wait(p, 450);
     ok(await p.evaluate(() => !document.getElementById('g-motif').hidden && window.AIX.profiles.ccp.MOTIF.length > 10 && window.AIX.profiles.ccp.SEEKBRAND.en === 'carol christian poell' && window.AIX.profiles.ccp.codeNum('LM/2498') === '2498'),
       'CCP keeps its motifs, its name in Find elsewhere, its model numbers');
@@ -504,7 +513,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
       ok(await p.evaluate(() => { const pan = document.getElementById('mm-brands'); return !pan.querySelector('.az') && [...pan.querySelectorAll('.mm-l a')].map((a) => a.getAttribute('href')).join() === '/?archive=hl,/?archive=ccp' }), 'no BRAND: the panel has the two archives');
       await p.mouse.move(700, 700);
       await p.keyboard.press('/'); await p.keyboard.type('helmut lang'); await wait(p, 500);
-      ok(await p.evaluate(() => !document.querySelector('.sr-bg') && document.querySelectorAll('.sr-g').length === 2 && /Brand names are not search terms/.test(document.getElementById('sres').textContent)), 'no BRAND: search as before');
+      ok(await p.evaluate(() => [...document.querySelectorAll('.sr-bg a.sr-bi')].map((a) => a.getAttribute('href')).join() === '/?archive=hl' && document.querySelectorAll('.sr-g').length === 1), 'no BRAND: the archives are still found by name');
       await p.keyboard.press('Escape'); await wait(p, 300);
       await p.goto(srv.base + '/?view=brands'); await H.ready(p); await wait(p, 400);
       const z = await p.evaluate(() => ({ names: [...document.querySelectorAll('.az-s a')].map((a) => a.getAttribute('href') + ' ' + a.textContent), li: document.querySelectorAll('.az-s li').length, letters: [...document.querySelectorAll('.az-l a')].map((a) => a.textContent).join(''), many: !!document.querySelector('.az-l.many') }));

@@ -30,6 +30,41 @@ function kday(d){ var m=/^\d{4}-(\d{2})-(\d{2})/.exec(d||''); return m?(+m[1])+'
 var KST=null; try{ KST=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) }catch(e){}
 function kst(iso){ var t=Date.parse(iso||''); if(isNaN(t)) return ''; return KST?KST.format(new Date(t)):new Date(t).toLocaleString('ko-KR') }
 function clip(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s }
+// a value inside a selector's quotes (a filter value can hold any character)
+function cssv(v){ v=String(v); try{ if(window.CSS && CSS.escape) return CSS.escape(v) }catch(e){} return v.replace(/["\\\n\r\f]/g,function(c){ return c==='\n'?'\\a ':c==='\r'?'\\d ':c==='\f'?'\\c ':'\\'+c }) }
+// one quiet line for a screen reader (a step in the detail, more listings drawn)
+function live(t){ var el=$('live'); if(!el) return; el.textContent=''; setTimeout(function(){ el.textContent=t },60) }
+// after the next paint: a press shows at once, the work it asks for comes in the following task
+function afterPaint(fn){ requestAnimationFrame(function(){ setTimeout(fn,0) }) }
+// A control the code draws again keeps the keyboard: its new copy takes the focus (known by what it does, its data-*),
+// or else the control now in its place, or else `fb`. Nothing moves if the focus was not lost.
+var KEEPA=['data-cat','data-off','data-v','data-nt','data-tt','data-azt','data-save','data-unsave','data-u','data-sort','data-g','data-retry','data-lay'];
+var FOC='a[href],button:not([disabled]),input,select,textarea,summary';
+function focusMark(ids){
+  var el=doc.activeElement; if(!el || el===doc.body || el===root) return null;
+  for(var i=0;i<ids.length;i++){ var box=$(ids[i]); if(!box || box===el || !box.contains(el)) continue;
+    var sel=el.tagName.toLowerCase(), any=false;
+    KEEPA.forEach(function(k){ if(el.hasAttribute(k)){ sel+='['+k+'="'+cssv(el.getAttribute(k))+'"]'; any=true } });
+    var c=el.closest('[data-k]'); if(c && c!==el && box.contains(c)){ sel='[data-a="'+cssv(c.getAttribute('data-a'))+'"][data-k="'+cssv(c.getAttribute('data-k'))+'"] '+sel; any=true }
+    return {box:ids[i], sel:any?sel:null, idx:[].slice.call(box.querySelectorAll(FOC)).indexOf(el)};
+  }
+  return null;
+}
+function focusBack(m,fb){
+  if(!m) return; var cur=doc.activeElement; if(cur && cur!==doc.body && cur!==root) return;
+  var box=$(m.box), t=null;
+  if(box && !box.hidden && box.getClientRects().length){
+    if(m.sel) t=box.querySelector(m.sel);
+    if(!t && m.idx>=0){ var all=box.querySelectorAll(FOC); if(all.length) t=all[Math.min(m.idx,all.length-1)] }
+  }
+  if(!t && fb) t=typeof fb==='string'?$(fb):fb;
+  if(t) try{ t.focus({preventScroll:true}) }catch(e){}
+}
+// a row of tabs wider than the screen fades at the edge it goes on past
+function edges(){ var ts=doc.querySelectorAll('.tabs'); for(var i=0;i<ts.length;i++) edge1(ts[i]) }
+function edge1(el){ if(!el.__e){ el.__e=1; el.addEventListener('scroll',function(){ edge1(el) },{passive:true}) }
+  el.classList.toggle('more', el.scrollWidth>el.clientWidth+4 && el.scrollLeft+el.clientWidth<el.scrollWidth-4) }
+var EDR=0; window.addEventListener('resize',function(){ if(!EDR) EDR=requestAnimationFrame(function(){ EDR=0; edges() }) },{passive:true});
 
 /* ---------------------------------------------------------------- motion
    Little of it: photographs fade in, a second photo on hover, the tab line, the photo that carries
@@ -42,7 +77,7 @@ function nextFrame(fn){ requestAnimationFrame(function(){ requestAnimationFrame(
 doc.addEventListener('pointerover',function(e){
   if(e.pointerType && e.pointerType!=='mouse') return;
   var ph=e.target.closest && e.target.closest('.card .ph'); if(!ph || ph.__b2) return; ph.__b2=1;
-  var it=itemOfEl(ph); if(!it) return; var u=okUrl(P[it.__a].photosOf(it)[1]); if(!u) return;
+  var it=itemOfEl(ph); if(!it) return; var u=phs(it)[1]; if(!u) return;
   var im=doc.createElement('img'); im.className='b2'; im.alt=''; im.decoding='async'; im.setAttribute('data-b','1');
   im.onload=function(){ im.classList.add('ok') }; im.onerror=function(){ im.remove() };
   im.src=okUrl(thumb(it.__a,u,600))||u; ph.appendChild(im);
@@ -52,9 +87,9 @@ if(!P.hl || !P.ccp){ var m0=$('main'); if(m0) m0.innerHTML='<div class="fatal"><
 
 /* ---------------------------------------------------------------- archives */
 var ARCH={
-  hl: {a:'hl', no:'01', name:'Helmut Lang', short:'Helmut Lang', path:'/helmut-lang/', sk:'hlx.saved', vk:'aix.visit.hl',
+  hl: {a:'hl', no:'01', name:'Helmut Lang', short:'Helmut Lang', ab:'HL', path:'/helmut-lang/', sk:'hlx.saved', vk:'aix.visit.hl',
        ph:'Item · year · model', span:'1986–2005', upd:'매일 09:00', sub:'1986–2005'},
-  ccp:{a:'ccp', no:'02', name:'Carol Christian Poell', short:'CCP', path:'/ccp/', sk:'ccpx.saved', vk:'aix.visit.ccp',
+  ccp:{a:'ccp', no:'02', name:'Carol Christian Poell', short:'CCP', ab:'CCP', path:'/ccp/', sk:'ccpx.saved', vk:'aix.visit.ccp',
        ph:'Item · year · number', span:'All seasons', upd:'매일', sub:'전 시즌'}
 };
 var AS=['hl','ccp'];
@@ -66,6 +101,8 @@ function roomHref(a){ return isB(a)?'/?brand='+slugOf(a):'/?archive='+a }
 // the reader for an id: a brand's own once it is ready; before that, the CCP page's slugs, bands and photo sizes (the same)
 function prof(a){ return P[a] || (isB(a)?P.ccp:null) }
 function ccpLike(a){ return a==='ccp' || isB(a) }
+// a listing's photographs that can be shown: an address the page would refuse is not counted as a photograph
+function phs(it){ return P[it.__a].photosOf(it).map(okUrl).filter(Boolean) }
 
 /* ---------------------------------------------------------------- words on screen
    Menus, filters, buttons and counts are English (set in capitals by the stylesheet); what a listing
@@ -107,35 +144,65 @@ function extract(t){
   if(s<1||e<0) throw new Error('nodata');
   return JSON.parse(t.slice(s,e));
 }
-function getJSON(u){ return fetch(u,{credentials:'same-origin'}).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json() }) }
-// an archive's data is in its page; a brand's is a file of its own, read by the brands' copy of the CCP rules
-function source(a){
-  if(isB(a)) return Promise.all([getJSON(ARCH[a].path), bengine()]).then(function(r){ bprof(a); return r[0] });
-  return fetch(ARCH[a].path,{credentials:'same-origin'})
-    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text() }).then(extract);
+// A request keeps its status on the error (only a 404 means "not there"), tries once more after a network failure or a
+// server error, gives up after 30 seconds, and lets go when the signal says the reader has left.
+function req(u,o,kind){
+  o=o||{};
+  var c=window.AbortController?new AbortController():null, up=o.signal, late=false, timer=0;
+  if(c){ timer=setTimeout(function(){ late=true; c.abort() },o.ms||30000);
+    if(up){ if(up.aborted) c.abort(); else up.addEventListener('abort',function(){ c.abort() }) } }
+  var opt={credentials:'same-origin'}; if(c) opt.signal=c.signal; if(o.low) opt.priority='low';
+  var once=function(){ return fetch(u,opt).then(function(r){
+    if(!r.ok){ var e=new Error('HTTP '+r.status); e.status=r.status; throw e }
+    return kind==='text'?r.text():kind==='none'?r.arrayBuffer().then(function(){ return null }):r.json() }) };
+  return once().catch(function(e){
+    if(late || (up && up.aborted) || !(e && (e.name==='TypeError' || e.status>=500))) throw e;
+    return new Promise(function(res){ setTimeout(res,900) }).then(once);
+  }).then(function(v){ clearTimeout(timer); return v },
+    function(e){ clearTimeout(timer); if(late){ var t=new Error('timeout'); t.status=0; throw t } throw e });
 }
+function getJSON(u,o){ return req(u,o,'json') }
+// an archive's data is in its page; a brand's is a file of its own, read by the brands' copy of the CCP rules
+// (a brand room opened from its address asks for its file at once, beside the brand index: EARLY)
+var EARLY={};
+function source(a,sig){
+  if(isB(a)){ var early=EARLY[a]; delete EARLY[a];
+    return Promise.all([early||getJSON(ARCH[a].path,{signal:sig}), bengine()]).then(function(r){ bprof(a); return r[0] }) }
+  return req(ARCH[a].path,{signal:sig},'text').then(extract);
+}
+// a brand's download stops when the reader leaves its room (Saved shows several brands and keeps them)
+var CTL={};
 function load(a){
   if(DATA[a]) return Promise.resolve(DATA[a]);
   if(PEND[a]) return PEND[a];
   if(!own.call(ARCH,a)) return Promise.reject(new Error('unknown'));
   busy(1);
-  PEND[a]=source(a)
-    .then(function(d){ if(!d || !Array.isArray(d.items)) throw new Error('shape'); ready(a,d); return d })
-    .then(function(d){ busy(-1); delete FAIL[a]; PEND[a]=null; if(ST.item && !DV.it) setTimeout(syncItem,0); return d },
-          function(e){ busy(-1); FAIL[a]=e; PEND[a]=null; if(ST.item && !DV.it) setTimeout(syncItem,0); throw e });
+  var c=isB(a) && window.AbortController ? new AbortController() : null; CTL[a]=c;
+  PEND[a]=source(a,c&&c.signal)
+    .then(function(d){ if(!d || !Array.isArray(d.items)) throw new Error('shape'); return ready(a,d,c&&c.signal) })
+    .then(function(d){ CTL[a]=null; busy(-1); delete FAIL[a]; PEND[a]=null; if(ST.item && !DV.it) setTimeout(syncItem,0); return d },
+          function(e){ CTL[a]=null; busy(-1); PEND[a]=null; if(!(c && c.signal.aborted)) FAIL[a]=e; if(ST.item && !DV.it) setTimeout(syncItem,0); throw e });
   return PEND[a];
+}
+function letGo(){
+  for(var a in CTL) if(own.call(CTL,a) && CTL[a] && !(ST.view==='room' && ST.a===a) && ST.view!=='saved') CTL[a].abort();
 }
 
 /* ---------------------------------------------------------------- brands: the index, their reader, today's new ones
    BIDX: null = not asked yet, false = none (not published, or unreadable), else the index. Brands without listings
    are in it with c = 0; a brand that has an archive here (ex) is that archive. */
-var BIDX=null, BIDXP=null, BENTRY={}, BLIST=[], BBASE={today:null, rates:{}, counts:{}};
+var BIDX=null, BIDXP=null, BENTRY={}, BLIST=[], BBASE={today:null, rates:{}, counts:{}}, BMETA=null;
+// BERR: the index is there but could not be read this time (anything but a 404) — a brand address then keeps its
+// place and says so, with Retry, instead of opening the list of brands
+var BERR=false;
 function num(v){ v=+v; return isFinite(v) && v>0 ? Math.floor(v) : 0 }
 function bidx(){
   if(BIDX!==null) return Promise.resolve(BIDX);
   if(BIDXP) return BIDXP;
-  busy(1);
-  BIDXP=getJSON('/BRAND/index.json').then(bindex).catch(function(){ return false })
+  busy(1); BERR=false;
+  BIDXP=getJSON('/BRAND/index.json').then(function(x){ var b=bindex(x); if(!b) BERR=true; return b },
+      function(e){ if(!(e && e.status===404)) BERR=true; return false })
+    .catch(function(){ BERR=true; return false })
     .then(function(x){ busy(-1); BIDX=x||false; BIDXP=null; brandPanel(); drawerMeta(); return BIDX });
   return BIDXP;
 }
@@ -159,6 +226,8 @@ function bindex(x){
   });
   BLIST=list;
   BBASE={today:typeof x.today==='string'?x.today:null, rates:x.rates && typeof x.rates==='object' ? x.rates : {}, counts:{}};
+  BMETA={built:typeof x.built==='string'?x.built:null,
+    sources:(Array.isArray(x.sources)?x.sources:[]).filter(function(s){ return s && typeof s==='object' && typeof s.name==='string' })};
   return {built:x.built, today:BBASE.today, brands:list};
 }
 // a brand seen for the first time today has every listing new; like an archive's first day, none of it counts as new
@@ -183,6 +252,7 @@ function bengine(){
   return BENGP;
 }
 function fold(s){ s=String(s||''); try{ s=s.normalize('NFKD') }catch(e){} return s.replace(/[\u0300-\u036f]/g,'') }
+var YLATE=new Date().getFullYear()+1;
 function bprof(a){
   if(P[a]) return P[a];
   var A=ARCH[a], b=A.e, base=BENG, me=Object.create(base), q=b.q;
@@ -196,6 +266,9 @@ function bprof(a){
   var use=function(){ if(BCUR!==a){ base.setData(me.__d||BBASE); BCUR=a } };
   me.tag=a; me.hasCodes=false; me.codeNum=null; me.__d=null; me.SEEKBRAND=sb;
   me.setData=function(d){ me.__d=d; base.setData(d); BCUR=a };
+  // a two-digit season reads as 19xx from 90 and 20xx below it (CCP began in 1995); a brand's AW88 would land in 2088.
+  // A year past next year is not guessed into another century: the season stays as written, the listing has no year
+  me.prep=function(it){ base.prep(it); if(it.__y && it.__y>YLATE){ it.__y=null; it.__yk='none' } };
   me.setQuery=function(t){ var bn=base.BRANDNOISE; bn.length=0; Array.prototype.push.apply(bn,noise); base.setQuery(t) };
   me.seekQuery=function(parts,L){ var s=base.SEEKBRAND; s.en=sb.en; s.ja=sb.ja; s.ko=sb.ko; return base.seekQuery(parts,L) };
   ['seenText','seenDays','dutyHtml','usdOf','flagsHtml'].forEach(function(f){ var fn=base[f]; me[f]=function(it){ use(); return fn(it) } });
@@ -203,12 +276,13 @@ function bprof(a){
 }
 // today's new listings across the brands (new.json): BNEW null = not asked yet, false = none
 var BNEW=null, BNEWP=null;
-function bnew(){
+// (o.low: asked for by the front page beside the two archives, which matter more there)
+function bnew(o){
   if(BNEW!==null) return Promise.resolve(BNEW);
   if(BNEWP) return BNEWP;
   BNEWP=bidx().then(function(x){ if(!x || !brandsIn().length) return false;
       busy(1);
-      return Promise.all([getJSON('/BRAND/new.json'), bengine()]).then(function(r){ return bnewReady(r[0]) })
+      return Promise.all([getJSON('/BRAND/new.json',{low:!!(o&&o.low)}), bengine()]).then(function(r){ return bnewReady(r[0]) })
         .then(function(v){ busy(-1); return v },function(){ busy(-1); return false }) })
     .catch(function(){ return false })
     .then(function(v){ BNEW=v||false; BNEWP=null; drawerMeta(); if(ST.item && !DV.it) setTimeout(syncItem,0); return BNEW });
@@ -221,7 +295,7 @@ function bnewReady(x){
   x.items.forEach(function(it,i){
     if(!it || typeof it!=='object' || typeof it.b!=='string') return;
     var a='b:'+it.b.toLowerCase(); if(!own.call(ARCH,a) || firstDay(ARCH[a].e)) return;
-    it.__a=a; it.__i=i; bprof(a).prep(it); it.__k=fnv(it.l||('#'+i)); it.__nw=1;
+    clean(it); it.__a=a; it.__i=i; bprof(a).prep(it); it.__k=fnv(it.l||('#'+i)); it.__nw=1;
     var m=byKey[a]||(byKey[a]={}); if(!own.call(m,it.__k)) m[it.__k]=it;
     items.push(it);
   });
@@ -234,13 +308,57 @@ function itemAt(a,k){
   var x=d && own.call(d.__byKey,k) ? d.__byKey[k] : null, y=m && own.call(m,k) ? m[k] : null;
   return ST.view==='new' ? (y||x) : (x||y);
 }
-function ready(a,d){
+// What a listing says is shown as it says it. What the code keeps beside it (the __ fields) never comes from the data,
+// and the few fields drawn into the page whole are checked first: a currency is three capitals, offers are objects,
+// a price history is a list of points.
+var CUR3=/^[A-Z]{3}$/;
+function clean(it){
+  for(var k in it) if(own.call(it,k) && k.charCodeAt(0)===95 && k.charCodeAt(1)===95) delete it[k];
+  if(it.u!=null && !(typeof it.u==='string' && CUR3.test(it.u))) delete it.u;
+  if(it.v!=null){
+    if(Array.isArray(it.v)){ it.v=it.v.filter(function(x){ return x && typeof x==='object' && !Array.isArray(x) });
+      it.v.forEach(function(x){ if(x.u!=null && !(typeof x.u==='string' && CUR3.test(x.u))) delete x.u }) }
+    else delete it.v;
+  }
+  if(it.h!=null && !(Array.isArray(it.h) && it.h.every(Array.isArray))) delete it.h;
+  if(it.im!=null && !Array.isArray(it.im)) delete it.im;
+  if(it.sc!=null && (typeof it.sc!=='object' || Array.isArray(it.sc))) delete it.sc;
+  ['t','s','r','z','e','q'].forEach(function(f){ if(it[f]!=null && typeof it[f]==='object') delete it[f] });
+}
+// A large brand file (thousands of listings) is read in slices of about 50 ms, so the page answers while it is read.
+// (The two archives are read at once: their rooms wait on them anyway, and slicing would only make them later.)
+var YIELD=(function(){ if(!window.MessageChannel) return function(fn){ setTimeout(fn,0) };
+  var ch=new MessageChannel(), q=[]; ch.port1.onmessage=function(){ var f=q.shift(); if(f) f() };
+  return function(fn){ q.push(fn); ch.port2.postMessage(0) } })();
+function prepAll(a,d,sig){
+  var p=P[a], items=d.items, n=items.length, i=0;
+  var one=function(j){ var it=items[j];
+    if(!it || typeof it!=='object' || Array.isArray(it)){ items[j]={t:'',k:0,__bad:1}; return }
+    clean(it); it.__a=a; it.__i=j; p.prep(it); it.__k=fnv(it.l||('#'+j)) };
+  if(!isB(a) || n<=3000 || !window.performance){ for(;i<n;i++) one(i); return null }
+  return new Promise(function(res,rej){
+    (function slice(){
+      // (a reader who has left the room stops the reading too)
+      if(sig && sig.aborted){ var e=new Error('aborted'); e.name='AbortError'; rej(e); return }
+      p.setData(d);   // another brand may have used the shared reader in between
+      var t0=performance.now();
+      while(i<n){ one(i++); if((i&63)===0 && performance.now()-t0>50) break }
+      if(i<n) YIELD(slice); else res();
+    })();
+  });
+}
+function ready(a,d,sig){
   var p=P[a]; p.setData(d);
+  if(!Array.isArray(d.sources)) d.sources=[];
+  var w=prepAll(a,d,sig);
+  return w ? w.then(function(){ p.setData(d); return tally0(a,d) }) : tally0(a,d);
+}
+function tally0(a,d){
+  var p=P[a];
   var byKey={}, byUrl={}, mc={}, live=0, cards=0, tn={A:0,B:0,C:0}, sold=0, gone=0, fresh=0;
   var vals={cat:{},src:{},y:{},motif:{},mark:{}}, cnt={src:{},motif:{}};
   for(var i=0;i<d.items.length;i++){
-    var it=d.items[i]; if(!it || typeof it!=='object'){ d.items[i]={t:'',k:0,__bad:1}; continue }
-    it.__a=a; it.__i=i; p.prep(it); it.__k=fnv(it.l||('#'+i));
+    var it=d.items[i]; if(it.__bad) continue;
     if(!own.call(byKey,it.__k)) byKey[it.__k]=it;
     if(it.l) byUrl[it.l]=it;
     if(it.so) sold++;
@@ -272,6 +390,23 @@ function ready(a,d){
   d.__order={cat:cats, y:ys.concat(vals.y.none?['none']:[]), src:srcs, motif:mos, mark:mks,
     price:p.PRICE.map(function(x){ return x[0] }), cert:['A','B','C']};
   DATA[a]=d;
+  if(isB(a)) keepFew(a);
+  return d;
+}
+// The last eight brand rooms read stay in memory; an older one is let go and read again if its room is opened again.
+// Not on Saved (it shows many brands at once), and never the room on screen or the listing open.
+var BREAD=[];
+function keepFew(a){
+  var i=BREAD.indexOf(a); if(i>=0) BREAD.splice(i,1); BREAD.push(a);
+  if(ST.view==='saved') return;
+  while(BREAD.length>8){
+    var j=0; while(j<BREAD.length && (BREAD[j]===a || BREAD[j]===ST.a || (DV.it && DV.it.__a===BREAD[j]) || PEND[BREAD[j]])) j++;
+    if(j>=BREAD.length) break;
+    var x=BREAD.splice(j,1)[0];
+    delete DATA[x];
+    if(P[x]) P[x].__d=null;
+    if(BCUR===x && BENG){ BENG.setData(BBASE); BCUR=null }
+  }
 }
 var VISITED={};
 function seen(a){ if(VISITED[a] || !DATA[a]) return; VISITED[a]=1; visit(a,DATA[a]) }
@@ -479,14 +614,16 @@ function go(st, push, after){ var prev=ST; if(push!==false) keepPlace(); ST=st; 
 function route(prev, after, place){
   // a brand room is known once the brand index is here: a brand with an archive of its own opens that archive,
   // a name the index does not have opens the list of brands
+  // (a brand without listings opens the list at its name; an index that could not be read keeps the address, with Retry)
   if(ST.view==='room' && isB(ST.a) && !own.call(ARCH,ST.a)){
     var want=ST;
     bidx().then(function(){
       if(ST!==want) return;
       if(!own.call(ARCH,ST.a)){
+        if(BERR){ brandDown(); return }
         var s=slugOf(ST.a), e=own.call(BENTRY,s)?BENTRY[s]:null;
         if(e && e.ex){ ST={view:'room', a:e.ex, F:ST.F, sort:ST.sort, item:ST.item}; tidy(ST) }
-        else ST={view:'brands', a:null, F:blankF(), sort:'new', item:null};
+        else { AZMARK=e?s:null; ST={view:'brands', a:null, F:blankF(), sort:'new', item:null} }
         writeUrl(false);
       }
       route(prev, after, place);
@@ -495,7 +632,8 @@ function route(prev, after, place){
   }
   var key=ST.view+':'+(ST.a||'');
   if(prev && key===MOUNTED){
-    if(filterKey()!==LASTQ) update();
+    // a change inside the same room: the press is drawn first, the listings follow (unless something waits on them)
+    if(filterKey()!==LASTQ){ if(after) update(); else soonUpdate() }
     syncItem(); if(after) after(); return;
   }
   var run=function(){ mount(); update(); syncItem();
@@ -526,14 +664,26 @@ function title(){
   else if(ST.view==='about') t='About — '+t;
   else if(ST.view==='new') t='New in — '+t;
   else if(ST.view==='brands') t='Brands — '+t;
-  else t='Archive Index — Helmut Lang · Carol Christian Poell';
+  else t='Archive Index — Helmut Lang · Carol Christian Poell · Brands';
   if(DV.it) t=clip(DV.it.t,60)+' — '+ARCH[DV.it.__a].name;
   doc.title=t;
-  // one canonical address per view (filters and the open listing are not separate pages)
+  // one canonical address per view (filters and the open listing are not separate pages); written here, not in the
+  // page, so an address never says another one is its own before the script has read it
   var c=doc.querySelector('link[rel="canonical"]'), q=ST.view==='room'?roomHref(ST.a).slice(1):ST.view!=='home'?'?view='+ST.view:'';
-  if(c) c.setAttribute('href','https://rozykuzy.github.io/'+q);
-  var md0=doc.querySelector('meta[name="description"]'), d=ST.view==='room'?DATA[ST.a]:null;
-  if(md0 && ST.view==='room') md0.setAttribute('content',ARCH[ST.a].name+(isB(ST.a)?'':' '+ARCH[ST.a].span)+' 중고 매물'+(d?' '+won(d.__cards)+'건':'')+' · 매일 갱신 · 판매자 통화와 원화 환산가');
+  if(!c){ c=doc.createElement('link'); c.rel='canonical'; doc.head.appendChild(c) }
+  c.setAttribute('href','https://rozykuzy.github.io/'+q);
+  // a description for each view, and Saved (this browser's own list) out of search engines
+  var md0=doc.querySelector('meta[name="description"]'), d=ST.view==='room'?DATA[ST.a]:null, nb=BIDX?BLIST.length:0, desc;
+  if(ST.view==='room') desc=ARCH[ST.a].name+(isB(ST.a)?'':' '+ARCH[ST.a].span)+' 중고 매물'+(d?' '+won(d.__cards)+'건':'')+' · 매일 갱신 · 판매자 통화와 원화 환산가';
+  else if(ST.view==='brands') desc='브랜드 A–Z'+(nb?' · '+won(brandList().length)+'곳':'')+' · Helmut Lang · Carol Christian Poell · 중고 매물 색인 · 매일 갱신';
+  else if(ST.view==='new') desc='오늘 처음 본 중고 매물 · Helmut Lang · Carol Christian Poell'+(nb?' · 브랜드 '+won(nb)+'곳':'');
+  else if(ST.view==='about') desc='Archive Index 읽는 법 · 연도 표기 · 가격 · 판매처 · 갱신';
+  else if(ST.view==='saved') desc='이 브라우저에 저장한 매물';
+  else desc='Helmut Lang 1986–2005, Carol Christian Poell'+(nb?'과 브랜드 '+won(nb)+'곳':'')+'의 중고 매물 색인. 매일 갱신, 판매자 통화와 원화 환산가, 상품명에 적힌 연도.';
+  if(md0) md0.setAttribute('content',desc);
+  var rb=doc.querySelector('meta[name="robots"]');
+  if(ST.view==='saved'){ if(!rb){ rb=doc.createElement('meta'); rb.name='robots'; doc.head.appendChild(rb) } rb.setAttribute('content','noindex') }
+  else if(rb) rb.remove();
 }
 function navUi(){
   // a brand room sits under Brands
@@ -544,9 +694,12 @@ function navUi(){
 }
 
 function mount(){
-  MOUNTED=ST.view+':'+(ST.a||''); LASTQ=null; GEN++;
+  MOUNTED=ST.view+':'+(ST.a||''); LASTQ=null; GEN++; WAITED={}; AUTO=false;
   if(IO){ IO.disconnect(); IO=null }
   closeDetail(true);
+  letGo();
+  // a filter drawer left open belongs to the page being replaced
+  if(root.classList.contains('lock-side')){ root.classList.remove('lock-side'); sideInert(false) }
   setRoom(roomOf());
   var m=$('main');
   if(ST.view==='room') m.innerHTML=roomShell(ST.a);
@@ -568,14 +721,29 @@ function update(){
   return homeUpdate(gen);
 }
 function refresh(){ LASTQ=null; update() }
+var SOON=0;
+function soonUpdate(){ if(SOON) return; var g=GEN; SOON=1; afterPaint(function(){ SOON=0; if(g===GEN && filterKey()!==LASTQ) update() }) }
+// A view that waits on several downloads (Saved, New in) waits on each once, and draws again at most once a frame.
+var WAITED={}, AGAIN={};
+function waitOn(gen,key,pr,fn){ var k=gen+'|'+key; if(WAITED[k]) return; WAITED[k]=1; var go1=function(){ again(gen,fn) }; pr.then(go1,go1) }
+function again(gen,fn){ if(gen!==GEN || AGAIN[gen]) return; AGAIN[gen]=1; requestAnimationFrame(function(){ AGAIN[gen]=0; if(gen===GEN) fn(gen) }) }
+// a brand address while the brand index could not be read: the address stays, the page says so
+function brxErr(){ return '<div class="err" role="alert"><p class="err-t">Brands · Could not load</p><p class="err-a"><button type="button" class="btn" data-retry="brx">Retry</button></p></div>' }
+function brandDown(){
+  MOUNTED='down:'+ST.a; LASTQ=null; GEN++; WAITED={};
+  closeDetail(true); letGo(); setRoom('home');
+  $('main').innerHTML='<section class="vh"><h1 id="vh" tabindex="-1" lang="en">Brands</h1></section><div class="body">'+brxErr()+'</div>';
+  navUi(); doc.title='Brands — Archive Index'; focusHead();
+}
 
 /* ---------------------------------------------------------------- pieces */
 function thumb(a,u,w){ try{ return prof(a).thumb(u,w) }catch(e){ return u } }
 function imgTag(a,u,w,o){
   o=o||{}; u=okUrl(u); if(!u) return '';
   var t=okUrl(thumb(a,u,w))||u;
+  // o.hi: the one photograph the page is about (a band's) — asked for first; o.eager: on the first screen, not lazy
   return '<img src="'+esc(t)+'"'+(t!==u?' data-full="'+esc(u)+'"':'')+' alt="'+esc(o.alt||'')+'"'+
-    (o.eager?' fetchpriority="high"':' loading="lazy"')+' decoding="async"'+(o.id?' id="'+o.id+'"':'')+'>';
+    (o.hi?' fetchpriority="high"':o.eager?'':' loading="lazy"')+' decoding="async"'+(o.id?' id="'+o.id+'"':'')+'>';
 }
 function bindImgs(r){
   var ims=(r||doc).querySelectorAll('img:not([data-b])');
@@ -609,51 +777,56 @@ function subLine(it){
   ].filter(Boolean).join(' · ');
 }
 // the year as the listing writes it — the archive's own reading (engine flagsHtml), first part only
+// (words in Hangul are set as words, not as tracked capitals: class k)
 function yearPart(it){
   var h=P[it.__a].flagsHtml(it), m=/^<span(?: class="([a-z]+)")?>([\s\S]*?)<\/span>/.exec(h);
-  return m?'<span class="yr'+(m[1]?' '+m[1]:'')+'">'+m[2]+'</span>':'';
+  return m?'<span class="yr'+(m[1]?' '+m[1]:'')+(RE_HANG.test(m[2])?' k':'')+'">'+m[2]+'</span>':'';
 }
 // what is happening to the listing: new today, a lower price, a sale on record, gone from the list
-function statusFl(it){
-  var d=DATA[it.__a], o=[];
+// (not what the section around it already says: no NEW on every card of New today, no PRICE DROP under Price drops)
+function statusFl(it,ctx){
+  var d=DATA[it.__a], o=[]; ctx=ctx||{};
   if(it.so) o.push('<span class="sold">Sold record</span>');
-  if((it.n || it.__nw) && !(d && d.__allnew)) o.push('<span class="nw">New</span>');
-  if(it.w && it.w>it.k) o.push('<span class="dr">Price drop</span>');
+  if((it.n || it.__nw) && !(d && d.__allnew) && !ctx['new']) o.push('<span class="nw">New</span>');
+  if(it.w && it.w>it.k && !ctx.drop) o.push('<span class="dr">Price drop</span>');
   if(it.x) o.push('<span>Delisted</span>');
   return o.join('');
 }
+// a struck price says what it is to a screen reader
+function wasSr(h){ return String(h).replace(/<span class="was">/g,'<span class="was"><span class="sr" lang="en">was </span>') }
+// an archive's name on a card: Carol Christian Poell is CCP on a phone
+function atName(a){ var A=ARCH[a]; return A.ab && A.name.length>12 ? '<span class="nm-l">'+esc(A.name)+'</span><span class="nm-s">'+esc(A.ab)+'</span>' : esc(A.name) }
 // the language a listing's own title is written in (its script decides), so a Japanese title breaks by Japanese rules,
 // takes Japanese glyph forms and is read by a Japanese voice; Hangul first, since a Korean title may quote kana
 var RE_HANG=/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/, RE_KANA=/[\u3040-\u30ff\u31f0-\u31ff\uff66-\uff9f]/, RE_HAN=/[\u3400-\u9fff]/;
 function tlang(t){ t=t||''; return RE_HANG.test(t)?'ko':(RE_KANA.test(t)||RE_HAN.test(t))?'ja':'en' }
-function tl(it){ return ' lang="'+(it.__lg||(it.__lg=tlang(it.t)))+'"' }
+function tl(it){ var l=it.__lg||(it.__lg=tlang(it.t)); return ' lang="'+(l==='ko'||l==='ja'?l:'en')+'"' }
 function card(it,o){
   o=o||{}; var a=it.__a, A=ARCH[a], p=P[a], k=it.__k, on=isSaved(it);
-  var ph=p.photosOf(it), ch=o.change?savedChange(it):null, st=statusFl(it);
+  var ph=phs(it), ch=o.change?savedChange(it):null, st=statusFl(it,o.ctx);
   return '<article class="card'+(it.x?' gone':'')+(it.so?' rec':'')+'" data-a="'+a+'" data-k="'+k+'">'+
-    '<div class="ph" data-open="'+k+'">'+imgTag(a,ph[0],600,{eager:o.eager})+'</div>'+
+    '<div class="ph" data-open="'+k+'">'+imgTag(a,ph[0],600,{eager:o.eager, alt:''})+'</div>'+
     '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="Save · '+esc(clip(it.t,40))+'"><i>'+HEART+'</i></button>'+
     '<div class="cap">'+
-      '<div class="vd">'+(o.tag?'<span class="at">'+esc(A.name)+'</span>':'')+yearPart(it)+'</div>'+
+      '<div class="vd">'+(o.tag?'<span class="at">'+atName(a)+'</span>':'')+yearPart(it)+'</div>'+
       '<h3 class="t"'+tl(it)+'><a href="'+roomHref(a)+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
-      p.priceHtml(it,false)+
+      wasSr(p.priceHtml(it,false))+
       (st?'<div class="fl">'+st+'</div>':'')+
       (ch?'<div class="chg">'+(ch.gone?'Delisted since saved':'Lower since saved '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
       '<div class="sub">'+subLine(it)+'</div>'+
     '</div></article>';
 }
-// one line of the index: number, photo, year as written, title, size, source, price
-function yearText(it){ return it.__e || (it.__yc && it.__yc.k!=='arch' ? it.__yc.v : '') || '' }
+// one line of the index: number, photo, year as written (the card's words), title, size, source, price
 function row(it,i,o){
-  o=o||{}; var a=it.__a, p=P[a], k=it.__k, on=isSaved(it), ph=p.photosOf(it)[0], y=yearText(it);
+  o=o||{}; var a=it.__a, k=it.__k, on=isSaved(it), ph=phs(it)[0];
   var price='₩'+won(it.k), cut=it.w>it.k?Math.round((it.w-it.k)/it.w*100):0;
-  var pr='<span class="r-p">'+(cut?'<s>₩'+won(it.w)+'</s>':'')+esc(price)+(cut?'<em>−'+cut+'%</em>':'')+'</span>';
+  var pr='<span class="r-p">'+(cut?'<s><span class="sr" lang="en">was </span>₩'+won(it.w)+'</s>':'')+esc(price)+(cut?'<em>−'+cut+'%</em>':'')+'</span>';
   return '<article class="row'+(it.x?' gone':'')+'" data-a="'+a+'" data-k="'+k+'">'+
     '<span class="r-no">'+String(i+1).padStart(3,'0')+'</span>'+
     '<span class="ph r-ph" data-open="'+k+'">'+imgTag(a,ph,160)+'</span>'+
     '<h3 class="r-t"'+tl(it)+'><a href="'+roomHref(a)+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
     '<span class="r-m">'+
-      '<span class="r-y'+(y?'':' s')+'">'+(y?esc(y):'연도 미상')+'</span>'+
+      '<span class="r-y">'+yearPart(it)+'</span>'+
       (it.z?'<span class="r-z">'+esc(it.z)+'</span>':'')+
       '<span class="r-s">'+(o.tag?esc(isB(a)?ARCH[a].short:ARCH[a].short==='CCP'?'CCP':'HL')+' · ':'')+esc(it.r)+'</span>'+
       pr+
@@ -676,30 +849,32 @@ function homeShell(){
   '<nav class="rooms" id="hero" aria-label="Archive rooms">'+AS.map(function(a){ var A=ARCH[a];
     return '<a class="room r-'+a+'" href="/?archive='+a+'">'+
       '<span class="room-ph" id="rp-'+a+'" aria-hidden="true"></span>'+
-      '<span class="room-t">'+
+      '<span class="room-t" lang="en">'+
         '<span class="room-name">'+esc(A.name)+'</span>'+
         '<span class="room-meta"><span class="room-sp">'+esc(A.span)+'</span><span class="room-stat" id="st-'+a+'"><span class="sk w60"></span></span></span>'+
         '<span class="room-go">Enter</span>'+
       '</span>'+
     '</a>' }).join('')+
   '</nav>'+
-  '<section class="sec bros" id="bros" aria-labelledby="brosH" hidden>'+
-    '<div class="sec-h"><h2 id="brosH">Brands</h2></div>'+
-    '<div class="bgrid" id="bgrid"></div>'+
-    '<div class="sec-more"><a class="btn" href="/?view=brands">All brands</a></div>'+
-  '</section>'+
   '<section class="sec today" id="today" aria-labelledby="todayH">'+
-    '<div class="sec-h"><h2 id="todayH">New today</h2><span class="sec-d" id="todayD"></span></div>'+
-    '<div class="tabs" id="todayT" role="group" aria-label="New today, by archive"></div>'+
+    '<div class="sec-h" lang="en"><h2 id="todayH">New today</h2><span class="sec-d" id="todayD"></span></div>'+
+    '<div class="tabs" id="todayT" role="group" aria-label="New today" lang="en"></div>'+
     '<div class="grid" id="tgrid">'+skel(8)+'</div>'+
-    '<div class="sec-more"><a class="btn" href="/?view=new">View all new</a></div>'+
+    '<div class="sec-more" lang="en"><a class="btn" href="/?view=new">View all new</a></div>'+
+  '</section>'+
+  // the brands under what came in today; a grey frame while the brand index is on its way, nothing without one
+  '<section class="sec bros" id="bros" aria-labelledby="brosH"'+(BIDX===false?' hidden':'')+'>'+
+    '<div class="sec-h" lang="en"><h2 id="brosH">Brands</h2></div>'+
+    '<div class="bgrid" id="bgrid">'+(BIDX===null?broSkel():'')+'</div>'+
+    '<div class="sec-more" lang="en"><a class="btn" href="/?view=brands">All brands</a></div>'+
   '</section>'+
   '<section class="sec drops" id="drops" aria-labelledby="dropsH" hidden>'+
-    '<div class="sec-h"><h2 id="dropsH">Price drops</h2></div>'+
+    '<div class="sec-h" lang="en"><h2 id="dropsH">Price drops</h2></div>'+
     '<div class="grid" id="dlist"></div>'+
-    '<div class="sec-more" id="dropsL"></div>'+
+    '<div class="sec-more" id="dropsL" lang="en"></div>'+
   '</section>';
 }
+function broSkel(){ var h=''; for(var i=0;i<4;i++) h+='<span class="bt sk-t" aria-hidden="true"><span class="ph"></span><span class="bt-n">&nbsp;</span><span class="bt-s">&nbsp;</span></span>'; return h }
 // the same photographs all day: a fixed shuffle of the listings with a photo, seeded by the day
 function seeded(str){ var h=2166136261>>>0; for(var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0 }
   return function(){ h^=h<<13; h>>>=0; h^=h>>>17; h^=h<<5; h>>>=0; return h/4294967296 } }
@@ -712,7 +887,7 @@ function heroPick(a,d,salt){
   if(!pool.length) return null;
   var r=seeded(a+(salt||'')+(d.today||'')); return pool[Math.floor(r()*pool.length)];
 }
-function heroImg(a,it,eager){ return it?imgTag(a,it.i,1200,{eager:eager}):'' }
+function heroImg(a,it,hi){ return it?imgTag(a,it.i,1200,{hi:hi}):'' }
 function roomPhoto(a,id,salt){
   var el=$(id), d=DATA[a]; if(!el || !d || el.__done) return; el.__done=1;
   el.innerHTML=heroImg(a,heroPick(a,d,salt),true); bindImgs(el);
@@ -720,9 +895,9 @@ function roomPhoto(a,id,salt){
 function shortTime(iso){ var s=kst(iso); return s.replace(/(\d{1,2})월\s*(\d{1,2})일\s*/,'$1/$2 ') }
 function statHtml(a,d){
   var s=[['Items',won(d.__cards)]];
-  if(!d.__allnew) s.push(['New',won(d.__fresh)]);
+  if(!d.__allnew && d.__fresh>0) s.push(['New',won(d.__fresh)]);
   if(d.built) s.push(['Updated',esc(shortTime(d.built))]);
-  return s.map(function(x){ return '<span><em>'+x[0]+'</em><b>'+x[1]+'</b></span>' }).join('');
+  return s.map(function(x){ return '<span><em>'+x[0]+'</em> <b>'+x[1]+'</b></span>' }).join('');
 }
 // the brands with the most new listings today (a brand's first day does not count), then the largest, four at most
 function cmpName(x,y){ return x.n.localeCompare(y.n,'en',{sensitivity:'base'}) }
@@ -736,17 +911,19 @@ function broUpdate(gen){
   bidx().then(function(x){
     var box=$('bros'), g=$('bgrid'); if(gen!==GEN || !box || !g) return;
     var L=x?broPick():[];
-    if(!L.length){ box.hidden=true; return }
+    if(!L.length){ box.hidden=true; g.innerHTML=''; return }
     g.innerHTML=L.map(function(b){ var fresh=b.nw>0 && !firstDay(b);
       return '<a class="bt" href="/?brand='+b.s+(fresh?'&amp;show=new':'')+'">'+
         '<span class="ph'+(b.ph[0]?'':' dead')+'">'+imgTag('b:'+b.s,b.ph.filter(bigOk)[0]||b.ph[0],600)+'</span>'+
         '<span class="bt-n">'+esc(b.n)+'</span>'+
-        '<span class="bt-s">'+(fresh?'<em>New</em><b>'+won(b.nw)+'</b>':'<em>Items</em><b>'+won(b.c)+'</b>')+'</span></a>' }).join('');
+        '<span class="bt-s" lang="en">'+(fresh?'<em>New</em> <b>'+won(b.nw)+'</b>':'<em>Items</em> <b>'+won(b.c)+'</b>')+'</span></a>' }).join('');
     bindImgs(g); box.hidden=false;
   });
 }
 function homeUpdate(gen){
   broUpdate(gen);
+  // New today counts the brands too (new.json), as New in does
+  bnew({low:true}).then(function(){ todayUpdate(gen); drawerMeta() });
   AS.forEach(function(a){
     var paint=function(){ if(gen!==GEN) return; var d=DATA[a]; seen(a);
       var st=$('st-'+a); if(st) st.innerHTML=statHtml(a,d);
@@ -759,35 +936,47 @@ function homeUpdate(gen){
 var TILELIST=[];
 function cmpNew(a,b){ return (b.n||0)-(a.n||0) || (a.f===b.f?0:(b.f||'')>(a.f||'')?1:-1) || b.k-a.k }
 function newOf(a){ var d=DATA[a]; if(!d) return []; return d.items.filter(function(it){ return it.n && !it.x && !it.so && !it.__bad && !d.__allnew }).sort(cmpNew) }
-var TODAYLIST=[], TODAYTAB='all', TODAYPER={};
+function bnewLive(){ return BNEW ? BNEW.items.filter(function(it){ return !it.x && !it.so && !it.__bad }).sort(cmpNew) : [] }
+// a tab: a name and its count. An archive's long name gives way to its letters on a phone (HL, CCP) and keeps both in
+// what a screen reader says
+function tabHtml(attr,cur,t){
+  var ab=t[3], lbl=ab?'<span class="nm-l">'+esc(t[1])+'</span><span class="nm-s" aria-hidden="true">'+esc(ab)+'</span>':esc(t[1]);
+  return '<button type="button" class="tab" data-'+attr+'="'+t[0]+'" aria-pressed="'+(t[0]===cur)+'"'+
+    (ab?' aria-label="'+esc(t[1]+' ('+ab+') '+won(t[2]))+'"':'')+(t[4]?' disabled':'')+'>'+lbl+'<sup>'+won(t[2])+'</sup></button>';
+}
+var TODAYLIST=[], TODAYTAB='all', TODAYPER={}, TODAYSRC=[];
 function todayUpdate(gen){
   if(gen!==GEN) return;
   var g=$('tgrid'); if(!g) return;
+  // (drawn when the two archives are here; the brands join when new.json is here, usually before)
   var done=AS.every(function(a){ return DATA[a] || FAIL[a] }); if(!done) return;
-  var per={}, total=0;
+  var fm=focusMark(['todayT']);
+  var per={}, total=0, src=AS.slice();
   AS.forEach(function(a){ per[a]=newOf(a); total+=per[a].length });
-  TODAYPER=per;
+  per.brands=bnewLive(); if(per.brands.length){ src.push('brands'); total+=per.brands.length }
+  TODAYPER=per; TODAYSRC=src;
   var d0=DATA.hl||DATA.ccp;
-  $('todayD').textContent=d0?enDay(d0.today):'';
+  $('todayD').textContent=d0?enDay(d0.today):(BNEW&&BNEW.today?enDay(BNEW.today):'');
   if(TODAYTAB!=='all' && !(per[TODAYTAB]||[]).length) TODAYTAB='all';
-  var tabs=[['all','All',total]].concat(AS.map(function(a){ return [a,ARCH[a].name,per[a].length] }));
-  $('todayT').innerHTML=total?tabs.filter(function(t){ return t[0]==='all' || t[2] }).map(function(t){
-    return '<button type="button" class="tab" data-tt="'+t[0]+'" aria-pressed="'+(t[0]===TODAYTAB)+'">'+esc(t[1])+'<sup>'+won(t[2])+'</sup></button>' }).join(''):'';
-  todayPaint();
+  var tabs=[['all','All',total]].concat(src.map(function(a){ return a==='brands'?['brands','Brands',per.brands.length]:[a,ARCH[a].name,per[a].length,ARCH[a].ab] }));
+  $('todayT').innerHTML=total?tabs.filter(function(t){ return t[0]==='all' || t[2] }).map(function(t){ return tabHtml('tt',TODAYTAB,t) }).join(''):'';
+  edges();
+  todayPaint(); focusBack(fm);
 }
 function todayPaint(){
   var g=$('tgrid'); if(!g) return;
-  var per=TODAYPER, out=[];
+  var per=TODAYPER, out=[], src=TODAYSRC;
   if(TODAYTAB==='all'){
-    var want={hl:10, ccp:6};
-    AS.forEach(function(a){ out=out.concat((per[a]||[]).slice(0,want[a])) });
-    AS.forEach(function(a){ if(out.length<16) out=out.concat((per[a]||[]).slice(want[a], want[a]+(16-out.length))) });
+    // a few from each, then more from whichever has them, sixteen at most
+    var want=src.length>2?{hl:6, ccp:4, brands:6}:{hl:10, ccp:6};
+    src.forEach(function(a){ out=out.concat((per[a]||[]).slice(0,want[a])) });
+    src.forEach(function(a){ if(out.length<16) out=out.concat((per[a]||[]).slice(want[a], want[a]+(16-out.length))) });
   } else out=(per[TODAYTAB]||[]).slice(0,16);
   TODAYLIST=out;
   var bad=AS.filter(function(a){ return FAIL[a] }).map(function(a){ return esc(ARCH[a].name)+' · Could not load' });
-  if(!out.length){ g.classList.add('none'); g.innerHTML='<p class="none-t">'+(bad.length?bad.join(' · '):'Nothing new today')+'</p>'; return }
+  if(!out.length){ g.classList.add('none'); g.innerHTML='<p class="none-t" lang="en">'+(bad.length?bad.join(' · '):'Nothing new today')+'</p>'; return }
   g.classList.remove('none');
-  g.innerHTML=out.map(function(it,i){ return card(it,{tag:true, eager:i<4}) }).join('');
+  g.innerHTML=out.map(function(it){ return card(it,{tag:true, ctx:{'new':1}}) }).join('');
   bindImgs(g);
 }
 // price cuts, newest first: the archive's own record of what a seller lowered
@@ -807,7 +996,7 @@ function dropsUpdate(gen){
   shown.sort(function(x,y){ var dx=cutDay(x), dy=cutDay(y); if(dx!==dy) return dy>dx?1:-1; return (y.w-y.k)/y.w-(x.w-x.k)/x.w });
   DROPLIST=shown.slice(0,8);
   $('dropsL').innerHTML=AS.map(function(a){ return per[a]?'<a class="btn" href="/?archive='+a+'&amp;show=drop&amp;sort=drop">'+esc(ARCH[a].name)+'<sup>'+won(per[a])+'</sup></a>':'' }).join('');
-  l.innerHTML=DROPLIST.map(function(it){ return card(it,{tag:true}) }).join('');
+  l.innerHTML=DROPLIST.map(function(it){ return card(it,{tag:true, ctx:{drop:1}}) }).join('');
   bindImgs(l); box.hidden=false;
 }
 /* ---------------------------------------------------------------- the menu's panels (a wide screen with a mouse):
@@ -825,15 +1014,15 @@ function megaMenus(){
   });
   brandPanel();
 }
-// under Brands: the two archives, and once the brand index is here every brand A–Z in compact columns
+// under Brands: the names that open a room (the two archives, and once the brand index is here every brand with
+// listings) A–Z in compact columns; every name, with or without listings, is one step on under All brands
 function brandPanel(){
   var b=$('mm-brands'); if(!b) return;
-  var L=brandList(), all=L.length>AS.length;
-  if(b.__n===L.length) return; b.__n=L.length;
-  b.innerHTML='<div class="mm-in"><div class="mm-c'+(all?' mm-az':'')+'"><p class="mm-h">A–Z</p><ul class="mm-l'+(all?' az':'')+'">'+L.map(function(x){
-      if(!x.href) return '<li><span class="mm-x">'+esc(x.name)+'</span></li>';
+  var all=brandList(), L=all.filter(function(x){ return x.href }), many=all.length>AS.length, key=L.length+'/'+all.length;
+  if(b.__n===key) return; b.__n=key;
+  b.innerHTML='<div class="mm-in"><div class="mm-c'+(many?' mm-az':'')+'"><p class="mm-h">A–Z</p><ul class="mm-l'+(many?' az':'')+'">'+L.map(function(x){
       return '<li><a href="'+x.href+'">'+esc(x.name)+(isB(x.a)?'<span class="n">'+won(x.n)+'</span>':'<span class="n" data-mmw="'+x.a+'|all"></span>')+'</a></li>' }).join('')+'</ul></div>'+
-    '<div class="mm-c mm-e"><a class="mm-all" href="/?view=brands">All brands</a></div></div>';
+    '<div class="mm-c mm-e"><a class="mm-all" href="/?view=brands">All brands'+(many?'<span class="n">'+won(all.length)+'</span>':'')+'</a></div></div>';
   AS.forEach(function(a){ var d=DATA[a], n=b.querySelector('[data-mmw="'+a+'|all"]'); if(d && n) n.textContent=d.__cards?won(d.__cards):'' });
 }
 function megaCounts(a){
@@ -853,7 +1042,7 @@ function drawerMeta(){
 }
 // the brands' new listings in New in: new.json once read, before that what the index says (new.json holds 400 at most)
 function bnewN(){
-  if(BNEW) return BNEW.items.filter(function(it){ return !it.x && !it.so && !it.__bad }).length;
+  if(BNEW) return bnewLive().length;
   if(!BIDX) return 0;
   var n=0; brandsIn().forEach(function(b){ if(!firstDay(b)) n+=b.nw }); return Math.min(n,400);
 }
@@ -861,42 +1050,46 @@ function bnewN(){
 /* ---------------------------------------------------------------- new in: what came in today, in both archives */
 var NEWLIST=[], NEWTAB='all', NEWSHOWN=0;
 function newShell(){
-  return '<section class="vh"><h1 id="vh" tabindex="-1">New in</h1><p class="rm" id="nwm"><span class="sk w40"></span></p></section>'+
-    '<div class="vtabs"><div class="tabs" id="newT" role="group" aria-label="Archive"></div></div>'+
+  return '<section class="vh" lang="en"><h1 id="vh" tabindex="-1">New in</h1><p class="rm" id="nwm"><span class="sk w40"></span></p></section>'+
+    '<div class="vtabs"><div class="tabs" id="newT" role="group" aria-label="New in" lang="en"></div></div>'+
     '<div class="body"><div class="res">'+
-      '<h2 class="sr">Listings</h2>'+
+      '<h2 class="sr" id="listH" tabindex="-1" lang="en">Listings</h2>'+
       '<div class="grid" id="ngrid">'+skel(8)+'</div>'+
-      '<div class="more" id="nmore" hidden><button type="button" class="btn" id="nmoreBtn">Load more</button></div>'+
+      '<div class="more" id="nmore" hidden lang="en"><button type="button" class="btn" id="nmoreBtn">Load more</button></div>'+
     '</div></div>';
 }
 function newUpdate(gen){
   var pending=AS.filter(function(a){ return !DATA[a] && !FAIL[a] });
-  pending.forEach(function(a){ load(a).then(function(){ if(gen===GEN) newUpdate(gen) },function(){ if(gen===GEN) newUpdate(gen) }) });
+  pending.forEach(function(a){ waitOn(gen,a,load(a),newUpdate) });
   var waitB=BNEW===null;
-  if(waitB) bnew().then(function(){ if(gen===GEN) newUpdate(gen) });
+  if(waitB) waitOn(gen,'bnew',bnew(),newUpdate);
   if(pending.length || waitB) return;
   AS.forEach(seen);
+  var fm=focusMark(['newT','ngrid','nmore']);
   // the two archives, and a third tab for the brands' new listings when the brand index has them
   var per={}, total=0, tabs=AS.slice();
   AS.forEach(function(a){ per[a]=newOf(a); total+=per[a].length });
-  if(BNEW){ tabs.push('brands'); per.brands=BNEW.items.filter(function(it){ return !it.x && !it.so && !it.__bad }).sort(cmpNew); total+=per.brands.length }
+  if(BNEW){ tabs.push('brands'); per.brands=bnewLive(); total+=per.brands.length }
   if(NEWTAB!=='all' && !(per[NEWTAB]||[]).length) NEWTAB='all';
   NEWLIST=NEWTAB==='all' ? tabs.reduce(function(o,a){ return o.concat(per[a]) },[]).sort(cmpNew) : per[NEWTAB].slice();
   var d0=DATA.hl||DATA.ccp;
   $('nwm').innerHTML=(d0?'<span>'+esc(enDay(d0.today))+'</span>':'')+'<span><b>'+won(total)+'</b> Items</span>'+
-    AS.filter(function(a){ return FAIL[a] }).map(function(a){ return '<span class="bad">'+esc(ARCH[a].name)+' · Could not load</span>' }).join('');
-  $('newT').innerHTML=[['all','All',total]].concat(tabs.map(function(a){ return [a,a==='brands'?'Brands':ARCH[a].name,per[a].length] })).map(function(t){
-    return '<button type="button" class="tab" data-nt="'+t[0]+'" aria-pressed="'+(t[0]===NEWTAB)+'"'+(t[2]||t[0]==='all'?'':' disabled')+'>'+esc(t[1])+'<sup>'+won(t[2])+'</sup></button>' }).join('');
+    AS.filter(function(a){ return FAIL[a] }).map(function(a){ return '<span class="bad">'+esc(ARCH[a].name)+' · Could not load</span>' }).join('')+
+    (BERR?'<span class="bad">Brands · Could not load</span>':'');
+  $('newT').innerHTML=[['all','All',total]].concat(tabs.map(function(a){ return a==='brands'?['brands','Brands',per.brands.length,'',!per.brands.length]:[a,ARCH[a].name,per[a].length,ARCH[a].ab,!per[a].length] }))
+    .map(function(t){ return tabHtml('nt',NEWTAB,t) }).join('');
+  edges();
   newPaint(true);
+  focusBack(fm,'vh');
 }
 function newPaint(reset){
   var g=$('ngrid'); if(!g) return;
   if(reset){ g.innerHTML=''; NEWSHOWN=0 }
   var mo=$('nmore');
-  if(!NEWLIST.length){ g.classList.add('none'); g.innerHTML='<p class="none-t">Nothing new today</p>'; mo.hidden=true; return }
+  if(!NEWLIST.length){ g.classList.add('none'); g.innerHTML='<p class="none-t" lang="en">Nothing new today</p>'; mo.hidden=true; return }
   g.classList.remove('none');
   var end=Math.min(NEWLIST.length,NEWSHOWN+BATCH), h='';
-  for(var i=NEWSHOWN;i<end;i++) h+=card(NEWLIST[i],{tag:true, eager:reset && i<4});
+  for(var i=NEWSHOWN;i<end;i++) h+=card(NEWLIST[i],{tag:true, eager:reset && i<4, ctx:{'new':1}});
   g.insertAdjacentHTML('beforeend',h); NEWSHOWN=end; bindImgs(g);
   mo.hidden=NEWSHOWN>=NEWLIST.length;
   $('nmoreBtn').textContent='Load more · '+won(NEWLIST.length-NEWSHOWN);
@@ -916,33 +1109,66 @@ function letterOf(n){ var c=fold(n).charAt(0).toUpperCase(); return /[A-Z]/.test
 // (the list waits for the brand index, so it is drawn once: two names, or all of them)
 function brandsShell(){
   return '<section class="rh az-h"><span class="rh-ph two" id="azph" aria-hidden="true"></span>'+
-      '<div class="rh-in"><h1 class="rt" id="vh" tabindex="-1">Brands</h1><p class="rm" id="azm">'+(BIDX===null?'<span class="sk w40"></span>':azStat())+'</p></div></section>'+
-    '<div id="azb">'+(BIDX===null?'':azBody())+'</div>';
+      '<div class="rh-in" lang="en"><h1 class="rt" id="vh" tabindex="-1">Brands</h1><p class="rm" id="azm">'+(BIDX===null?'<span class="sk w40"></span>':azStat())+'</p></div></section>'+
+    '<div id="azb"'+(AZTAB==='listed'?' class="listed"':'')+'>'+(BIDX===null?'':BERR?brxErr():azBody())+'</div>';
 }
-function azStat(){ return '<span class="st"><b>'+won(brandList().length)+'</b> <em>Brands</em></span>' }
+function azStat(){ return BERR?'':'<span class="st"><b>'+won(brandList().length)+'</b> <em>Brands</em></span>' }
+// All, or only the names that open a room (Listed): a choice on this page, not an address
+var AZTAB='all', AZMARK=null;
 function azBody(){
-  var L=brandList(), by={};
+  var L=brandList(), by={}, listed=L.filter(function(b){ return b.href }).length;
   L.forEach(function(b){ var c=letterOf(b.name); (by[c]=by[c]||[]).push(b) });
   var letters=keys(by).sort(function(x,y){ return x==='#'?-1:y==='#'?1:x<y?-1:x>y?1:0 }), id=function(c){ return c==='#'?'num':c };
-  return '<nav class="az-l'+(letters.length>9?' many':'')+'" aria-label="A to Z">'+letters.map(function(c){ return '<a href="#az-'+id(c)+'" data-az="'+id(c)+'">'+c+'</a>' }).join('')+'</nav>'+
+  var none=function(c){ return !by[c].some(function(b){ return b.href }) };
+  var tabs=listed<L.length?'<div class="az-t"><div class="tabs" role="group" aria-label="Brands" lang="en">'+
+    [['all','All',L.length],['listed','Listed',listed]].map(function(t){ return '<button type="button" class="tab" data-azt="'+t[0]+'" aria-pressed="'+(AZTAB===t[0])+'">'+t[1]+'<sup>'+won(t[2])+'</sup></button>' }).join('')+'</div></div>':'';
+  return tabs+'<nav class="az-l'+(letters.length>9?' many':'')+'" aria-label="A to Z">'+letters.map(function(c){
+      return '<a href="#az-'+id(c)+'" data-az="'+id(c)+'"'+(none(c)?' class="z"':'')+(c==='#'?' aria-label="0–9"':'')+'>'+c+'</a>' }).join('')+'</nav>'+
     '<div class="az">'+letters.map(function(c){
-      return '<section class="az-s" id="az-'+id(c)+'" aria-labelledby="azh-'+id(c)+'"><h2 id="azh-'+id(c)+'">'+c+'</h2><ul>'+
-        by[c].map(function(b){
-          if(!b.href) return '<li><span class="az-x"><span class="az-n">'+esc(b.name)+'</span></span></li>';
-          return '<li><a href="'+b.href+'"><span class="az-n">'+esc(b.name)+'</span><span class="n"'+(isB(b.a)?'>'+won(b.n):' id="azn-'+b.a+'">')+'</span></a></li>' }).join('')+
+      return '<section class="az-s'+(none(c)?' z':'')+'" id="az-'+id(c)+'"><h2 id="azh-'+id(c)+'"'+(c==='#'?' aria-label="0–9"':'')+'>'+c+'</h2><ul>'+
+        by[c].map(function(b){ var ds=isB(b.a)?' data-s="'+slugOf(b.a)+'"':'';
+          if(!b.href) return '<li class="z"'+ds+'><span class="az-x"><span class="az-n">'+esc(b.name)+'</span></span></li>';
+          return '<li'+ds+'><a href="'+b.href+'"><span class="az-n">'+esc(b.name)+'</span> <span class="n"'+(isB(b.a)?'>'+won(b.n):' id="azn-'+b.a+'">')+'</span></a></li>' }).join('')+
       '</ul></section>' }).join('')+'</div>';
 }
+// The page needs no archive of its own: the photographs come from the brand index, the two archives' counts are shown
+// when they are already here. Without a brand index (not published yet) it is the two archives' page, as before.
 function brandsUpdate(gen){
   var fillA=function(){ AS.forEach(function(a){ var n=$('azn-'+a); if(n && DATA[a]) n.textContent=won(DATA[a].__cards) }); azPhoto() };
-  if(BIDX===null) bidx().then(function(){ if(gen!==GEN) return; var b=$('azb'), m=$('azm'); if(b && m){ m.innerHTML=azStat(); b.innerHTML=azBody(); fillA() } });
-  AS.forEach(function(a){
-    var fill=function(){ if(gen!==GEN) return; fillA() };
-    if(DATA[a]) fill(); else load(a).then(fill,function(){});
-  });
+  var after=function(){
+    if(gen!==GEN) return;
+    if(!BIDX && !BERR) AS.forEach(function(a){ if(DATA[a]) return; load(a).then(function(){ if(gen===GEN) fillA() },function(){}) });
+    fillA(); title(); if(AZMARK) nextFrame(azMark);
+  };
+  if(BIDX===null) bidx().then(function(){ if(gen!==GEN) return; var b=$('azb'), m=$('azm'); if(b && m){ m.innerHTML=azStat(); b.innerHTML=BERR?brxErr():azBody() } after() });
+  else after();
 }
 function azPhoto(){
-  var el=$('azph'); if(!el || el.__done || !AS.every(function(a){ return DATA[a] })) return; el.__done=1;
-  el.innerHTML=AS.map(function(a){ return '<span>'+heroImg(a,heroPick(a,DATA[a],'brands'),true)+'</span>' }).join(''); bindImgs(el);
+  var el=$('azph'); if(!el || el.__done) return;
+  var pick=[];
+  if(BIDX){
+    var pool=brandsIn().filter(function(b){ return b.c>0 && b.ph.length }), big=pool.filter(function(b){ return b.ph.some(bigOk) });
+    if(big.length>=2) pool=big;
+    if(pool.length>=2){ var r=seeded('brands'+(BBASE.today||'')), i=Math.floor(r()*pool.length), j=Math.floor(r()*(pool.length-1)); if(j>=i) j++;
+      pick=[pool[i],pool[j]].map(function(b){ return imgTag('b:'+b.s,b.ph.filter(bigOk)[0]||b.ph[0],1200,{hi:true}) }) }
+  }
+  if(!pick.length && AS.every(function(a){ return DATA[a] })) pick=AS.map(function(a){ return heroImg(a,heroPick(a,DATA[a],'brands'),true) });
+  if(!pick.length) return;
+  el.__done=1; el.innerHTML=pick.map(function(h){ return '<span>'+h+'</span>' }).join(''); bindImgs(el);
+}
+// a brand without listings, opened by its address: the list, at its name
+function azMark(){
+  var s=AZMARK; AZMARK=null; if(!s) return;
+  var li=doc.querySelector('.az-s li[data-s="'+cssv(s)+'"]'); if(!li) return;
+  if(AZTAB==='listed' && li.classList.contains('z')){ AZTAB='all'; azTabs() }
+  li.classList.add('on');
+  var h=li.closest('.az-s') && li.closest('.az-s').querySelector('h2');
+  if(h){ h.setAttribute('tabindex','-1'); try{ h.focus({preventScroll:true}) }catch(e){} }
+  window.scrollTo(0,Math.max(0,li.getBoundingClientRect().top+window.scrollY-Math.round(innerHeight/3)));
+}
+function azTabs(){
+  var b=$('azb'); if(!b) return; b.classList.toggle('listed',AZTAB==='listed');
+  var ts=b.querySelectorAll('[data-azt]'); for(var i=0;i<ts.length;i++) ts[i].setAttribute('aria-pressed',String(ts[i].getAttribute('data-azt')===AZTAB));
 }
 
 /* ---------------------------------------------------------------- room */
@@ -954,82 +1180,100 @@ var ICO={
 };
 function roomShell(a){
   var A=ARCH[a];
-  var grp=function(g,inner,id){ return '<details class="fg"'+(id?' id="'+id+'"':'')+' open><summary>'+esc(grpEn(a,g))+'</summary>'+inner+'</details>' };
+  var grp=function(g,inner,id){ return '<details class="fg"'+(id?' id="'+id+'"':'')+' open><summary lang="en">'+esc(grpEn(a,g))+'</summary>'+inner+'</details>' };
   return '<section class="rh">'+
       '<span class="rh-ph" id="rhp" aria-hidden="true"></span>'+
-      '<div class="rh-in">'+
+      '<div class="rh-in" lang="en">'+
         '<h1 class="rt" id="vh" tabindex="-1">'+esc(A.name)+'</h1>'+
         '<p class="rm" id="rm"><span class="sk w60"></span></p>'+
         '<p class="since" id="since" hidden></p>'+
       '</div>'+
     '</section>'+
-    '<div class="cats" id="cats" role="group" aria-label="Category"></div>'+
+    '<div class="cats" id="cats" role="group" aria-label="Category" lang="en"></div>'+
     '<div class="bar" id="bar"><div class="bar-in">'+
-      '<button type="button" class="ftog" id="ftog" aria-expanded="false" aria-controls="side">'+ICO.sliders+'<span class="ft-l">Filter and sort</span><span class="n" id="fn"></span></button>'+
+      '<button type="button" class="ftog" id="ftog" aria-expanded="false" aria-controls="side" lang="en">'+ICO.sliders+'<span class="ft-l">Filter and sort</span><span class="n" id="fn"></span></button>'+
       '<div class="qf">'+ICO.mag+
         '<input id="rq" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder="'+esc(A.ph)+'" aria-label="Search '+esc(A.name)+'">'+
         '<button type="button" class="qx" id="rqx" aria-label="Clear search" hidden>'+ICO.xs+'</button></div>'+
-      '<div class="lay" id="lay" role="group" aria-label="View">'+
+      '<div class="lay" id="lay" role="group" aria-label="View" lang="en">'+
         '<button type="button" data-lay="grid" aria-pressed="'+(LAY!=='list')+'">Grid</button>'+
         '<button type="button" data-lay="list" aria-pressed="'+(LAY==='list')+'">List</button>'+
       '</div>'+
-      '<a class="skip2" href="#listH">Skip to listings</a>'+
-      '<div class="selw"><select id="sort" aria-label="Sort">'+SORT.map(function(s){ return '<option value="'+s[0]+'"'+(s[0]==='rel'?' hidden':'')+'>'+s[1]+'</option>' }).join('')+'</select></div>'+
-      '<div class="count" id="count" role="status" aria-live="polite"></div>'+
+      '<a class="skip2" href="#listH" lang="en">Skip to listings</a>'+
+      '<div class="selw" lang="en"><select id="sort" aria-label="Sort">'+SORT.map(function(s){ return '<option value="'+s[0]+'"'+(s[0]==='rel'?' hidden':'')+'>'+s[1]+'</option>' }).join('')+'</select></div>'+
+      '<div class="count" id="count" role="status" aria-live="polite" lang="en"></div>'+
     '</div></div>'+
     '<div class="side-shade" id="sideShade" hidden></div>'+
-    '<aside class="side" id="side" aria-label="Filter and sort">'+
-      '<div class="side-top"><div class="side-tt"><h2>Filter and sort</h2><p class="side-n" id="sideN"></p></div>'+
+    // a dialog over the page: the page behind it is inert while it is open (sideInert)
+    '<div class="side shut" id="side" role="dialog" aria-modal="true" aria-labelledby="sideH">'+
+      '<div class="side-top" lang="en"><div class="side-tt"><h2 id="sideH">Filter and sort</h2><p class="side-n" id="sideN"></p></div>'+
         '<button type="button" class="ico" id="sideX" aria-label="Close filters">'+ICO.x+'</button></div>'+
       '<div class="side-in">'+
-        '<details class="fg fg-sort" open><summary>Sort by</summary><ul class="ops" id="f-sort"></ul></details>'+
-        grp('y','<div class="yrs" id="f-y"></div>')+
+        '<details class="fg fg-sort" open><summary lang="en">Sort by</summary><ul class="ops" id="f-sort" lang="en"></ul></details>'+
+        grp('y','<div class="yrs" id="f-y" lang="en"></div>')+
         grp('cert','<ul class="ops" id="f-cert"></ul>')+
         grp('motif','<ul class="ops cols" id="f-motif"></ul>','g-motif')+
         grp('src','<ul class="ops" id="f-src"></ul>')+
-        grp('price','<ul class="ops" id="f-price"></ul>')+
+        grp('price','<ul class="ops" id="f-price" lang="en"></ul>')+
         grp('mark','<ul class="ops" id="f-mark"></ul>','g-mark')+
-        grp('flag','<ul class="ops" id="f-flag"></ul>')+
-        '<details class="fg" open><summary>Size</summary><label class="sr" for="fsize">Size</label><input class="fsize" id="fsize" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="48 · M · 32"></details>'+
+        grp('flag','<ul class="ops" id="f-flag" lang="en"></ul>')+
+        '<details class="fg" open><summary lang="en">Size</summary><label class="sr" for="fsize" lang="en">Size</label><input class="fsize" id="fsize" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="48 · M · 32"></details>'+
       '</div>'+
-      '<div class="side-foot"><button type="button" class="lnk" id="clearAll">Clear</button><button type="button" class="btn solid" id="sideDone">Show results</button></div>'+
-    '</aside>'+
+      '<div class="side-foot" lang="en"><button type="button" class="lnk" id="clearAll">Clear</button><button type="button" class="btn solid" id="sideDone">Show results</button></div>'+
+    '</div>'+
     '<div class="body"><div class="res">'+
       '<div class="applied" id="applied" hidden></div>'+
-      '<h2 class="sr" id="listH" tabindex="-1">Listings</h2>'+
-      '<p class="crng" id="crng" hidden></p>'+
+      '<h2 class="sr" id="listH" tabindex="-1" lang="en">Listings</h2>'+
+      '<p class="crng" id="crng" hidden lang="en"></p>'+
       '<div class="'+(LAY==='list'?'ix':'grid')+'" id="grid">'+skel(12)+'</div>'+
-      '<div class="more" id="more" hidden><button type="button" class="btn" id="moreBtn">Load more</button></div>'+
+      '<div class="more" id="more" hidden lang="en"><button type="button" class="btn" id="moreBtn">Load more</button></div>'+
       '<div class="empty" id="empty" hidden></div>'+
       '<section class="seek" id="seek" aria-label="Find elsewhere" hidden></section>'+
     '</div></div>';
 }
-// the filter drawer comes in from the left on every screen, over a shade that closes it
+// the filter drawer comes in from the left on every screen, over a shade that closes it; closed, its contents are not
+// laid out at all (shut), so a change of filter does not pay for a drawer no one sees
 function sideOpen(on){
   var s=$('side'), t=$('ftog'), sh=$('sideShade'); if(!s||!t) return;
+  if(on){ clearTimeout(sideOpen.t); s.classList.remove('shut') }
   s.classList.toggle('open',on); t.setAttribute('aria-expanded',String(on));
-  root.classList.toggle('lock-side',on);
+  root.classList.toggle('lock-side',on); sideInert(on);
   if(sh){
     if(on){ sh.hidden=false; nextFrame(function(){ if(s.classList.contains('open')) sh.classList.add('on') }) }
     else { sh.classList.remove('on'); setTimeout(function(){ if(!sh.classList.contains('on')) sh.hidden=true },REDUCED.matches?0:320) }
   }
-  if(on){ var x=$('sideX'); if(x) x.focus({preventScroll:true}) }
-  else if(doc.activeElement && s.contains(doc.activeElement)) t.focus({preventScroll:true});
+  if(on){ var x=$('sideX'); if(x){ try{ x.focus({preventScroll:true}) }catch(e){}
+      // (with reduced motion the drawer can still be hidden for this one moment: try again once it is drawn)
+      if(doc.activeElement!==x) nextFrame(function(){ if(s.classList.contains('open')) try{ x.focus({preventScroll:true}) }catch(e){} }) } }
+  else {
+    if(doc.activeElement && s.contains(doc.activeElement)) t.focus({preventScroll:true});
+    sideOpen.t=setTimeout(function(){ if(!s.classList.contains('open')) s.classList.add('shut') },REDUCED.matches?0:380);
+  }
 }
-var qTimer=null, zTimer=null, SORTB4=null, IO=null;
+// while the drawer is open the page around it is out of reach (it sits inside main, so main's parts, not main)
+function sideInert(on){
+  [$('top'),$('foot'),doc.querySelector('.skip'),doc.querySelector('#main > .rh'),$('cats'),$('bar'),doc.querySelector('#main > .body')].forEach(function(el){
+    if(!el) return; if(on){ el.setAttribute('inert',''); el.setAttribute('aria-hidden','true') } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden') } });
+}
+var qTimer=null, zTimer=null, SORTB4=null, IO=null, AUTO=false;
 var LAY=lsGet('aix.layout')==='list'?'list':'grid';
-function setSort(v){ if(SORTV.indexOf(v)<0 || v===ST.sort) return; var st=cloneST(); st.sort=v; SORTB4=null; ST=st; writeUrl(false); roomUpdate(GEN) }
+function setSort(v){ if(SORTV.indexOf(v)<0 || v===ST.sort) return; var st=cloneST(); st.sort=v; SORTB4=null; ST=st; writeUrl(false); soonUpdate() }
 function bindRoom(){
   $('cats').addEventListener('click',function(e){
     var b=e.target.closest('[data-cat]'); if(!b) return;
+    // the press shows at once; the listings follow in the next moment
+    var bs=this.querySelectorAll('.cat'); for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-pressed',String(bs[i]===b)); placeInd(null);
     var v=b.getAttribute('data-cat'), F=copyF(ST.F); F.cat={}; if(v) F.cat[v]=1;
     go({view:'room', a:ST.a, F:F, sort:ST.sort, item:null});
   });
   $('side').addEventListener('click',function(e){
-    var so=e.target.closest('[data-sort]'); if(so){ setSort(so.getAttribute('data-sort')); return }
+    var so=e.target.closest('[data-sort]');
+    if(so){ var rs=$('f-sort').querySelectorAll('[data-sort]'); for(var i=0;i<rs.length;i++){ var on=rs[i]===so; rs[i].classList.toggle('on',on); rs[i].setAttribute('aria-pressed',String(on)) }
+      setSort(so.getAttribute('data-sort')); return }
     var b=e.target.closest('[data-g]'); if(!b) return;
     var g=b.getAttribute('data-g'), v=b.getAttribute('data-v'), F=copyF(ST.F);
     if(F[g][v]) delete F[g][v]; else F[g][v]=1;
+    b.classList.toggle('on',!!F[g][v]); b.setAttribute('aria-pressed',String(!!F[g][v]));
     FOCUS={g:g, v:v};
     go({view:'room', a:ST.a, F:F, sort:ST.sort, item:null});
   });
@@ -1044,36 +1288,40 @@ function bindRoom(){
   $('clearAll').addEventListener('click',function(){ clearAll() });
   $('sort').addEventListener('change',function(){ setSort(this.value) });
   var q=$('rq');
-  q.addEventListener('input',function(){
+  var applyQ=function(){
     var v=q.value.replace(/\s+/g,' ').trim().toLowerCase().slice(0,80);
-    $('rqx').hidden=!q.value;
-    clearTimeout(qTimer);
-    qTimer=setTimeout(function(){
-      if(v===ST.F.q) return;
-      var st=cloneST(); st.F.q=v; st.item=null;
-      if(v && st.sort!=='rel'){ SORTB4=st.sort; st.sort='rel' }
-      if(!v && st.sort==='rel'){ st.sort=SORTB4||'new'; SORTB4=null }
-      ST=st; writeUrl(false); roomUpdate(GEN);
-    },180);
-  });
-  q.addEventListener('keydown',function(e){ if(e.key==='Enter'){ q.blur() } if(e.key==='Escape' && q.value){ e.stopPropagation(); clearQ() } });
+    if(v===ST.F.q) return;
+    var st=cloneST(); st.F.q=v; st.item=null;
+    if(v && st.sort!=='rel'){ SORTB4=st.sort; st.sort='rel' }
+    if(!v && st.sort==='rel'){ st.sort=SORTB4||'new'; SORTB4=null }
+    ST=st; writeUrl(false); roomUpdate(GEN);
+  };
+  q.addEventListener('input',function(){ $('rqx').hidden=!q.value; clearTimeout(qTimer); qTimer=setTimeout(applyQ,180) });
+  // Enter: the search now, and the keyboard goes on to the listings (on a phone this also puts the keyboard away)
+  q.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){ e.preventDefault(); clearTimeout(qTimer); applyQ(); var h=$('listH'); if(h) try{ h.focus() }catch(x){} }
+    if(e.key==='Escape' && q.value){ e.stopPropagation(); clearQ() } });
   $('rqx').addEventListener('click',function(){ clearQ(); q.focus() });
   $('fsize').addEventListener('input',function(){
     var v=this.value.trim().toLowerCase().slice(0,24); clearTimeout(zTimer);
     zTimer=setTimeout(function(){ if(v===ST.F.size) return; var st=cloneST(); st.F.size=v; st.item=null; ST=st; writeUrl(false); roomUpdate(GEN) },180);
   });
-  $('moreBtn').addEventListener('click',function(){ paint(false) });
+  // more by hand: the keyboard lands on the first new listing, a screen reader hears how many came; from then on
+  // the list also grows by itself near its end (before that, the page's foot stays within reach)
+  $('moreBtn').addEventListener('click',function(){ var n0=SHOWN; paint(false); AUTO=true; landOn($('grid'),n0); live(won(SHOWN-n0)+' more · '+won(SHOWN)+' of '+won(VIEW.length)) });
   $('lay').addEventListener('click',function(e){ var b=e.target.closest('[data-lay]'); if(!b) return; var v=b.getAttribute('data-lay'); if(v===LAY) return;
     LAY=v; lsSet('aix.layout',v); var bs=this.querySelectorAll('[data-lay]'); for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-pressed',String(bs[i].getAttribute('data-lay')===v));
     pvHide(); var keep=SHOWN; paint(true); while(SHOWN<keep && SHOWN<VIEW.length) paint(false) });
   if(IO){ IO.disconnect(); IO=null }
   if('IntersectionObserver' in window){
-    var io=IO=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting && !$('more').hidden && SHOWN>0 && SHOWN<VIEW.length) paint(false) }) },{rootMargin:'900px 0px'});
+    var io=IO=new IntersectionObserver(function(es){ es.forEach(function(e){ if(AUTO && e.isIntersecting && !$('more').hidden && SHOWN>0 && SHOWN<VIEW.length) paint(false) }) },{rootMargin:'900px 0px'});
     io.observe($('more'));
   }
   var c=$('cats'), endp=function(){ c.classList.toggle('end', c.scrollLeft+c.clientWidth>=c.scrollWidth-4) };
   c.addEventListener('scroll',endp,{passive:true}); setTimeout(endp,0);
 }
+// the first of the listings just drawn takes the keyboard
+function landOn(box,i){ var c=box && box.children[i], l=c && c.querySelector('.t a, .r-t a'); if(l) try{ l.focus() }catch(e){} }
 function clearQ(){ clearTimeout(qTimer); var q=$('rq'); if(q) q.value=''; var x=$('rqx'); if(x) x.hidden=true;
   if(!ST.F.q) return; var st=cloneST(); st.F.q=''; if(st.sort==='rel'){ st.sort=SORTB4||'new'; SORTB4=null } st.item=null; ST=st; writeUrl(false); roomUpdate(GEN) }
 function cloneST(){ return {view:ST.view, a:ST.a, F:copyF(ST.F), sort:ST.sort, item:ST.item} }
@@ -1169,27 +1417,31 @@ function flagOpts(a){
 function flagLbl(a,f){ return f==='since'?'Since last visit':(FLAGEN[f]||f) }
 function roomUpdate(gen){
   var a=ST.a;
+  if(!$('grid')) return;
   if(!DATA[a]){
-    $('grid').innerHTML=skel(12);
+    $('grid').innerHTML=skel(12); $('empty').hidden=true; $('empty').innerHTML='';
     load(a).then(function(){ if(gen!==GEN) return; seen(a); tidy(ST); writeUrl(false); roomUpdate(gen); syncItem() },
       function(){ if(gen!==GEN) return; $('grid').innerHTML=''; $('empty').hidden=false; $('empty').innerHTML=errBox(a); $('rm').textContent='' });
     return;
   }
   seen(a);
   LASTQ=filterKey();
+  // the control under the keyboard is drawn again below: its new copy (or the one now in its place) keeps the focus
+  var fm=focusMark(['cats','applied','empty','since','grid']);
   var d=DATA[a], p=P[a], F=ST.F;
   compute(a); title();
   roomPhoto(a,'rhp','room');
-  // head
-  var tn=d.__tn, st=function(l,n){ return '<span class="st"><em>'+l+'</em><b>'+(typeof n==='number'?won(n):n)+'</b></span>' };
-  var bits=['<span class="st">'+esc(ARCH[a].span)+'</span>', st('Items',d.__cards), st('Dated',tn.A)];
-  if(!d.__allnew) bits.push(st('New',d.__fresh));
+  // head (Dated only when it says something Items does not; New only when there is some)
+  var tn=d.__tn, st=function(l,n){ return '<span class="st"><em>'+l+'</em> <b>'+(typeof n==='number'?won(n):n)+'</b></span>' };
+  var bits=['<span class="st">'+esc(ARCH[a].span)+'</span>', st('Items',d.__cards)];
+  if(tn.A>0 && tn.A<d.__cards) bits.push(st('Dated',tn.A));
+  if(!d.__allnew && d.__fresh>0) bits.push(st('New',d.__fresh));
   if(d.__sold) bits.push(st('Sold records',d.__sold));
   bits.push(st('Updated',esc(shortTime(d.built))));
   $('rm').innerHTML=bits.join('');
   var sn=$('since');
   if(SINCE[a]){ var ns=0; d.items.forEach(function(it){ if(!it.x && !it.so && it.f && it.f>SINCE[a]) ns++ });
-    sn.hidden=!ns; sn.innerHTML=ns?'<button type="button" aria-pressed="'+!!F.flag.since+'">Since your visit '+esc(md(SINCE[a]))+'<b>'+won(ns)+'</b></button>':'' }
+    sn.hidden=!ns; sn.innerHTML=ns?'<button type="button" aria-pressed="'+!!F.flag.since+'">Since your visit '+esc(md(SINCE[a]))+' <b>'+won(ns)+'</b></button>':'' }
   else sn.hidden=true;
   // search box and sort mirror the state (a link or the back button may have changed them)
   var q=$('rq'); if(q && doc.activeElement!==q && q.value.trim().toLowerCase()!==F.q) q.value=F.q;
@@ -1199,6 +1451,7 @@ function roomUpdate(gen){
   cats(a); facets(a); applied(a); countLine(a); paint(true); empty(a); seek(a);
   var fn=$('fn'), nf=0; ['y','motif','price','src','cert','mark','flag'].forEach(function(g){ nf+=keys(F[g]).length }); if(F.size) nf++;
   if(fn) fn.textContent=nf?won(nf):'';
+  focusBack(fm,'listH');
 }
 function cats(a){
   var d=DATA[a], F=ST.F, fc=FACET.cat, sel=keys(F.cat), tot=0;
@@ -1209,6 +1462,7 @@ function cats(a){
   var el=$('cats'), ind=el.querySelector('.ind'), was=ind?{x:ind.__x, w:ind.__w}:null;
   el.innerHTML=h+'<span class="ind" aria-hidden="true"></span>'; el.classList.add('has-ind');
   placeInd(was);
+  var on=el.querySelector('.cat[aria-pressed="true"]'); if(on && (on.offsetLeft<el.scrollLeft || on.offsetLeft+on.offsetWidth>el.scrollLeft+el.clientWidth)) el.scrollLeft=Math.max(0,on.offsetLeft-24);
 }
 function placeInd(was){
   var el=$('cats'); if(!el) return; var ind=el.querySelector('.ind'); if(!ind) return;
@@ -1254,7 +1508,6 @@ function facets(a){
   if(keep){ var b=$('side').querySelector('[data-g="'+keep.g+'"][data-v="'+cssv(keep.v)+'"]'); if(b) b.focus({preventScroll:true}) }
   else if(keepSort){ var sb=$('side').querySelector('[data-sort="'+cssv(ST.sort)+'"]'); if(sb) sb.focus({preventScroll:true}) }
 }
-function cssv(v){ return String(v).replace(/["\\]/g,'\\$&') }
 function tokLabel(a,g,v){
   var p=P[a];
   if(g==='cert') return p.CERT[v]||v;
@@ -1294,7 +1547,6 @@ function countLine(a){
     if(ks.length>1){ var lo=Math.min.apply(null,ks), hi=Math.max.apply(null,ks);
       r+='<span>Price ₩'+won(lo)+'–'+won(hi)+'</span><span>Median ₩'+won(medianOf(ks))+'</span>' }
   }
-  if(F.q){ var p=P[a], QT=p.getQT(); if(!QT.length) r+='<span>Brand names are not search terms</span>' }
   var el=$('crng'); el.innerHTML=r; el.hidden=!r;
 }
 function paint(reset){
@@ -1302,7 +1554,9 @@ function paint(reset){
   if(reset){ g.innerHTML=''; SHOWN=0 }
   var end=Math.min(VIEW.length,SHOWN+BATCH), h='';
   var list=LAY==='list'; if(reset) g.className=list?'ix':'grid';
-  for(var i=SHOWN;i<end;i++) h+=list?row(VIEW[i],i):card(VIEW[i],{eager:reset && i<4});
+  // (a section that already says New or Price drop does not say it again on every card)
+  var ctx={'new':!!ST.F.flag['new'], drop:!!ST.F.flag.drop};
+  for(var i=SHOWN;i<end;i++) h+=list?row(VIEW[i],i):card(VIEW[i],{eager:reset && i<4, ctx:ctx});
   g.insertAdjacentHTML('beforeend',h); SHOWN=end;
   bindImgs(g);
   var mo=$('more'); mo.hidden=SHOWN>=VIEW.length;
@@ -1319,7 +1573,7 @@ function empty(a){
   var e=$('empty'), g=$('grid');
   if(VIEW.length){ e.hidden=true; e.innerHTML=''; return }
   g.innerHTML='';
-  var t=tokens(a), h='<p class="empty-t">No results</p>';
+  var t=tokens(a), h='<p class="empty-t" lang="en">No results</p>';
   if(t.length){ h+='<div class="empty-o">'+t.map(function(x){ var n=countWithout(a,x.g,x.v);
       return '<button type="button" class="btn ghost" data-off="'+x.g+'" data-v="'+esc(x.v)+'">Remove '+esc(x.l)+'<sup>'+won(n)+'</sup></button>' }).join('')+'</div>' }
   e.innerHTML=h; e.hidden=false;
@@ -1343,9 +1597,12 @@ function seek(a){
 
 /* ---------------------------------------------------------------- saved */
 function savedShell(){
-  return '<section class="vh"><h1 id="vh" tabindex="-1">Saved</h1><p class="rm" id="svm"><span class="sk w40"></span></p></section>'+
-    '<div id="svb">'+AS.map(function(a){ return '<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'">'+esc(ARCH[a].name)+'<span class="n" id="sgn-'+a+'"></span></h2>'+
-      '<div class="grid" id="sgg-'+a+'"></div><ul class="miss" id="sgm-'+a+'" hidden></ul></section>' }).join('')+'<div id="svbr"></div></div>';
+  return '<section class="vh" lang="en"><h1 id="vh" tabindex="-1">Saved</h1><p class="rm" id="svm"><span class="sk w40"></span></p></section>'+
+    '<div id="svb">'+AS.map(function(a){ return '<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'" lang="en">'+esc(ARCH[a].name)+' <span class="n" id="sgn-'+a+'"></span></h2>'+
+      '<div class="grid" id="sgg-'+a+'"></div><ul class="miss" id="sgm-'+a+'" hidden></ul></section>' }).join('')+'<div id="svbr"></div>'+
+    // nothing saved: the ways in, no sentence
+    '<div class="empty sv-e" id="svx" hidden lang="en"><div class="empty-o">'+[['/?view=new','New in'],['/?archive=hl','Helmut Lang'],['/?archive=ccp','Carol Christian Poell'],['/?view=brands','Brands']].map(function(x){
+      return '<a class="btn ghost" href="'+x[0]+'">'+x[1]+'</a>' }).join('')+'</div></div></div>';
 }
 // the brands' saved listings by brand: '<slug>|<key>' → {slug: [keys]} ('' for keys of no brand)
 function bSavedBy(){
@@ -1360,8 +1617,10 @@ function bSavedPending(){
 }
 var SAVEDLIST=[];
 function savedUpdate(gen){
-  var pending=AS.filter(function(a){ return !DATA[a] && !FAIL[a] });
-  pending.forEach(function(a){ load(a).then(function(){ if(gen===GEN) savedUpdate(gen) },function(){ if(gen===GEN) savedUpdate(gen) }) });
+  if(!$('svb')) return;
+  var fm=focusMark(['svb']);
+  var pending=AS.filter(function(a){ return !DATA[a] && !FAIL[a] && keys(SAVED[a]||{}).length });
+  pending.forEach(function(a){ waitOn(gen,a,load(a),savedUpdate) });
   var total=0; SAVEDLIST=[];
   AS.forEach(function(a){
     var m=SAVED[a]||{}, urls=keys(m), d=DATA[a], g=$('sgg-'+a), miss=$('sgm-'+a), sec=$('sg-'+a);
@@ -1385,17 +1644,16 @@ function savedUpdate(gen){
   // the brands after the archives, a section each, A–Z (a saved key names its brand and the listing's key, not its address)
   var by=bSavedBy(), ss=keys(by), bx=$('svbr'), bh='';
   ss.forEach(function(s){ total+=by[s].length });
-  if(ss.length && BIDX===null) bidx().then(function(){ if(gen===GEN) savedUpdate(gen) });
+  if(ss.length && BIDX===null) waitOn(gen,'bidx',bidx(),savedUpdate);
   if(!ss.length || BIDX===null) bx.innerHTML='';
-  else if(!BIDX) bx.innerHTML='<section class="sg" aria-labelledby="sgh-brx"><h2 class="sg-h" id="sgh-brx">Brands<span class="n">'+won(ss.reduce(function(n,s){ return n+by[s].length },0))+'</span></h2>'+
-      '<div class="err" role="alert"><p class="err-t">Brands · Could not load</p><p class="err-a"><button type="button" class="btn" data-retry="brx">Retry</button></p></div></section>';
+  else if(!BIDX) bx.innerHTML='<section class="sg" aria-labelledby="sgh-brx"><h2 class="sg-h" id="sgh-brx" lang="en">Brands <span class="n">'+won(ss.reduce(function(n,s){ return n+by[s].length },0))+'</span></h2>'+brxErr()+'</section>';
   else {
     var bm=SAVED.brx;
     ss.map(function(s){ var a='b:'+s; return {s:s, a:a, name:own.call(ARCH,a)?ARCH[a].name:own.call(BENTRY,s)?BENTRY[s].n:(s||'Brands')} })
       .sort(function(x,y){ return cmpName({n:x.name},{n:y.name}) }).forEach(function(g){
         var ks=by[g.s], a=g.a, known=!!g.s && own.call(ARCH,a), d=known?DATA[a]:null, body;
         if(known && !d){
-          if(!FAIL[a]) load(a).then(function(){ if(gen===GEN) savedUpdate(gen) },function(){ if(gen===GEN) savedUpdate(gen) });
+          if(!FAIL[a]) waitOn(gen,a,load(a),savedUpdate);
           body=FAIL[a]?errBox(a):'<div class="grid">'+skel(Math.min(4,ks.length))+'</div>';
         } else {
           var have=[], lost=[];
@@ -1406,20 +1664,23 @@ function savedUpdate(gen){
             (lost.length?'<ul class="miss">'+lost.map(function(k){ return '<li><span class="miss-l">Not in today’s list</span>'+
               '<button type="button" class="lnk" data-unsave="brx" data-u="'+esc(k)+'">Remove</button></li>' }).join('')+'</ul>':'');
         }
-        bh+='<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'">'+esc(g.name)+'<span class="n">'+won(ks.length)+'</span></h2>'+body+'</section>';
+        bh+='<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'" lang="en">'+esc(g.name)+' <span class="n">'+won(ks.length)+'</span></h2>'+body+'</section>';
       });
     bx.innerHTML=bh; bindImgs(bx);
   }
   $('svm').innerHTML=total?'<span><b>'+won(total)+'</b> '+(total===1?'Item':'Items')+'</span><span>Kept in this browser</span>':'<span>Nothing saved</span>';
+  $('svx').hidden=!!total;
+  focusBack(fm,'vh');
   var box=$('svb'); if(box && !box.__b){ box.__b=1; box.addEventListener('click',function(e){ var b=e.target.closest('[data-unsave]'); if(!b) return;
     var s=b.getAttribute('data-unsave'), u=b.getAttribute('data-u'); if(!own.call(STORES,s)) return; var m=readSaved(s); delete m[u]; lsSet(STORES[s],JSON.stringify(m)); SAVED[s]=m; savedUi(); refresh() }) }
 }
 
 /* ---------------------------------------------------------------- about */
 function aboutShell(){
-  return '<section class="vh"><h1 id="vh" tabindex="-1">About</h1><p class="rm"><span>Helmut Lang 1986–2005</span><span>Carol Christian Poell</span><span>중고 매물 색인</span></p></section>'+
+  return '<section class="vh"><h1 id="vh" tabindex="-1" lang="en">About</h1><p class="rm"><span>Helmut Lang 1986–2005</span><span>Carol Christian Poell</span><span id="abn" hidden></span><span>중고 매물 색인</span></p></section>'+
   '<div class="ab">'+
-    AS.map(function(a){ return '<section class="ab-s" aria-labelledby="abh-'+a+'"><h2 id="abh-'+a+'">'+esc(ARCH[a].name)+'</h2><dl class="kv" id="ab-'+a+'"><dt>범위</dt><dd>'+esc(ARCH[a].sub)+'</dd><dt>갱신</dt><dd>'+esc(ARCH[a].upd)+'</dd></dl></section>' }).join('')+
+    AS.map(function(a){ return '<section class="ab-s" aria-labelledby="abh-'+a+'"><h2 id="abh-'+a+'" lang="en">'+esc(ARCH[a].name)+'</h2><dl class="kv" id="ab-'+a+'"><dt>범위</dt><dd>'+esc(ARCH[a].sub)+'</dd><dt>갱신</dt><dd>'+esc(ARCH[a].upd)+'</dd></dl></section>' }).join('')+
+    '<section class="ab-s" id="abs-b" aria-labelledby="abh-b" hidden><h2 id="abh-b" lang="en">Brands</h2><dl class="kv" id="ab-b"></dl></section>'+
     '<section class="ab-s" aria-labelledby="abh-r"><h2 id="abh-r">읽는 법</h2><dl class="kv">'+
       '<dt>연도</dt><dd>상품명에 적힌 것만 <span class="basis">연도 표기 · 시기 표기 · 미확인</span></dd>'+
       '<dt>가격</dt><dd>판매자 통화와 원화 환산 <span class="basis">그날 환율</span></dd>'+
@@ -1453,6 +1714,22 @@ function aboutUpdate(gen){
     };
     if(DATA[a]) fill(); else load(a).then(fill,function(){});
   });
+  // the brands, from their index: how many, how many with listings, when, from where
+  bidx().then(function(x){
+    var sec=$('abs-b'), el=$('ab-b'), n=$('abn'); if(gen!==GEN || !sec || !el || !x) return;
+    // (the index's own count: Carol Christian Poell is one of its brands, read here as its archive)
+    var L=BLIST, withC=brandsIn().filter(function(b){ return b.c>0 }), cards=0; withC.forEach(function(b){ cards+=b.c });
+    var r=BBASE.rates||{}, rates=['USD','EUR','GBP'].filter(function(c){ return r[c]>0 }).map(function(c){ return c+' '+won(r[c]) });
+    if(r.JPY>0) rates.push('JPY 100 '+won(r.JPY));
+    var src=(BMETA&&BMETA.sources)||[];
+    el.innerHTML='<dt>범위</dt><dd>브랜드 '+won(L.length)+'곳 <span class="basis">매물 '+won(withC.length)+'곳</span></dd>'+
+      '<dt>매물</dt><dd>'+won(cards)+'</dd>'+
+      '<dt>갱신</dt><dd>매일'+(BMETA&&BMETA.built?' <span class="basis">마지막 '+esc(kst(BMETA.built))+'</span>':'')+'</dd>'+
+      (src.length?'<dt>판매처</dt><dd>'+src.map(function(s){ return esc(s.name)+(typeof s.how==='string'&&s.how?' <span class="basis">'+esc(s.how)+'</span>':'') }).join('<br>')+'</dd>':'')+
+      (rates.length?'<dt>환율</dt><dd>'+esc(rates.join(' · '))+' <span class="basis">원 · '+esc(md(typeof r.date==='string'?r.date:BBASE.today))+'</span></dd>':'')+
+      '<dt>목록</dt><dd><a href="/?view=brands">Brands A–Z</a></dd>';
+    sec.hidden=false; if(n){ n.textContent='브랜드 '+won(L.length)+'곳'; n.hidden=false }
+  });
 }
 
 /* ---------------------------------------------------------------- detail */
@@ -1476,7 +1753,8 @@ function syncItem(){
   if(!ST.item){ if(DV.it) closeDetail(true); return }
   var it=findItem(ST.item);
   if(!it){
-    var waiting=(ST.view==='room'?[ST.a]:AS).some(function(a){ return !DATA[a] && !FAIL[a] }) ||
+    // (Saved reads only the archives it has listings from)
+    var waiting=(ST.view==='room'?[ST.a]:ST.view==='saved'?AS.filter(function(a){ return keys(SAVED[a]||{}).length }):AS).some(function(a){ return !DATA[a] && !FAIL[a] }) ||
       (ST.view==='new' && BNEW===null) || (ST.view==='saved' && bSavedPending());
     if(waiting) return;
     ST.item=null; writeUrl(false); if(DV.it) closeDetail(true); return;
@@ -1526,14 +1804,18 @@ function upgrade(){
 }
 function showDetail(it,fromUi,o){
   var ov=$('ov'), dv=$('dv'), wasOpen=!!DV.it;
+  o=o||{};
+  // the page is drawn first and only then taken over: a record that cannot be drawn leaves everything as it was
+  var list=listFor(it), idx=list?list.indexOf(it):-1, html=null;
+  try{ html=detailHtml(it,o.lo,list,idx) }catch(e){ html=null }
+  if(html==null){ if(ST.item===it.__k){ ST.item=null; writeUrl(false) } if(!wasOpen) DV.pushed=false; toast('Could not open'); return }
   var stepF=wasOpen && doc.activeElement && doc.activeElement.getAttribute ? doc.activeElement.getAttribute('data-step') : null;
   if(!wasOpen) DV.ret=doc.activeElement;
   if(!fromUi && !wasOpen) DV.pushed=false;
-  DV.it=it; DV.list=listFor(it); DV.idx=DV.list?DV.list.indexOf(it):-1;
+  DV.it=it; DV.list=list; DV.idx=idx;
   ackSaved(it); savedUi();
-  o=o||{};
   dv.setAttribute('data-a',it.__a); dv.setAttribute('data-room',it.__a);
-  dv.innerHTML=detailHtml(it,o.lo);
+  dv.innerHTML=html;
   bindImgs(dv); DV.ph=0;
   ov.hidden=false;
   root.classList.add('lock');
@@ -1546,7 +1828,7 @@ function showDetail(it,fromUi,o){
   title();
   preload(1); preload(-1);
 }
-function preload(step){ if(!DV.list||DV.idx<0) return; var n=DV.list[DV.idx+step]; if(!n) return; var u=okUrl(P[n.__a].photosOf(n)[0]); if(u){ var im=new Image(); im.decoding='async'; im.src=thumb(n.__a,u,1200) } }
+function preload(step){ if(!DV.list||DV.idx<0) return; var n=DV.list[DV.idx+step]; if(!n) return; var u=phs(n)[0]; if(u){ var im=new Image(); im.decoding='async'; im.src=thumb(n.__a,u,1200) } }
 function closeDetail(silent,now){
   if(!DV.it) return;
   var ov=$('ov');
@@ -1554,8 +1836,12 @@ function closeDetail(silent,now){
   var done=function(){ if(!ov.classList.contains('open')){ ov.hidden=true; $('dv').innerHTML=''; ov.classList.remove('now') } };
   if(REDUCED.matches || now) done(); else setTimeout(done,240);
   root.classList.remove('lock'); inert(false);
-  var r=DV.ret; DV.it=null; DV.list=null; DV.idx=-1; DV.ret=null;
-  if(r && r.focus && doc.contains(r)) try{ r.focus({preventScroll:true}) }catch(e){}
+  var it=DV.it, r=DV.ret; DV.it=null; DV.list=null; DV.idx=-1; DV.ret=null;
+  // the keyboard goes back to the listing's own card when it is on the page (after stepping, the one last open),
+  // else to where it was, else to the page's heading
+  var sel='[data-a="'+cssv(it.__a)+'"][data-k="'+cssv(it.__k)+'"]', cur=doc.querySelector('.grid '+sel+' .t a, .ix '+sel+' .r-t a');
+  var t=cur || (r && r.focus && r!==doc.body && doc.contains(r) ? r : null) || $('vh');
+  if(t) try{ t.focus({preventScroll:true}) }catch(e){}
   title();
 }
 function closeByUser(){
@@ -1573,31 +1859,35 @@ function step(d){
   ST.item=n.__k; writeUrl(false);
   var pushed=DV.pushed, ret=DV.ret;
   showDetail(n,true); DV.pushed=pushed; DV.ret=ret;
+  // the detail is drawn again; one quiet line says where it is now
+  if(DV.it===n) live(won(DV.idx+1)+' / '+won(DV.list.length)+' · '+clip(n.t,80));
 }
+// what lies under an open layer is out of reach: the skip link too
 function inert(on){
-  ['top','main','foot','drawer'].forEach(function(id){ var el=$(id); if(!el) return;
+  [$('top'),$('main'),$('foot'),$('drawer'),doc.querySelector('.skip')].forEach(function(el){ if(!el) return;
     if(on){ el.setAttribute('inert',''); el.setAttribute('aria-hidden','true') } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden') } });
 }
+// the year, in the words the card uses (연도 미확인: no year confirmed), and on what it rests
 function yearLine(it){
   var p=P[it.__a];
   if(it.__e) return esc(it.__e)+' <span class="basis">판매자 표기</span>';
-  if(it.__yc) return (it.__yc.k==='arch'?'연도 미상':esc(it.__yc.v))+' <span class="basis">'+esc(p.CLAIMBASIS[it.__yc.k]||p.CLAIMBASIS.arch)+'</span>';
+  if(it.__yc) return (it.__yc.k==='arch'?'연도 미확인':esc(it.__yc.v))+' <span class="basis">'+esc(p.CLAIMBASIS[it.__yc.k]||p.CLAIMBASIS.arch)+'</span>';
   if(it.c==='A') return '연도 표기 <span class="basis">판매 페이지 확인</span>';
-  if(it.c==='B') return '연도 미상 <span class="basis">아카이브 표기</span>';
-  return '미확인 <span class="basis">상품명에 없음</span>';
+  if(it.c==='B') return '연도 미확인 <span class="basis">아카이브 표기</span>';
+  return '연도 미확인 <span class="basis">상품명에 없음</span>';
 }
-function detailHtml(it,lo){
-  var a=it.__a, A=ARCH[a], p=P[a], ph=p.photosOf(it), on=isSaved(it), d=DATA[a];
-  var pos=DV.list&&DV.idx>=0?won(DV.idx+1)+' / '+won(DV.list.length):'';
+function detailHtml(it,lo,list,idx){
+  var a=it.__a, A=ARCH[a], p=P[a], ph=phs(it), on=isSaved(it), d=DATA[a];
+  var pos=list&&idx>=0?won(idx+1)+' / '+won(list.length):'';
   var link=okUrl(it.l), bee=!it.so && p.buyeeUrl(it.l);
   var mcN=it.mc && p.codeNum && MCOUNT[a] ? (MCOUNT[a][p.codeNum(it.mc)]||0) : 0;
   var seenAt=SRCSEEN[a] && own.call(SRCSEEN[a],it.r) ? SRCSEEN[a][it.r] : null;
   var seen=p.seenText(it), stop=seenAt && d && d.today && seenAt<d.today;
   var kv='<dt>사이즈</dt><dd>'+(it.z?esc(it.z):'미표기')+'</dd>'+
-    '<dt>분류</dt><dd>'+esc(it.s)+'</dd>'+
+    '<dt>분류</dt><dd lang="en">'+esc(catEn(it.s))+'</dd>'+
     (it.mc && !isB(a)?'<dt>번호</dt><dd><span class="mc">'+esc(it.mc)+'</span>'+(mcN>1?' <button type="button" class="lnk" data-code="'+esc(p.codeNum(it.mc))+'">같은 번호 '+won(mcN)+'건</button>':'')+' <span class="basis">상품명</span></dd>':'')+
     '<dt>연도</dt><dd>'+yearLine(it)+'</dd>'+
-    (it.__mk.length?'<dt>표기</dt><dd>'+it.__mk.map(function(k){ return esc(p.MARKLBL[k]||k) }).join(' · ')+' <span class="basis">상품명</span></dd>':'')+
+    (it.__mk.length?'<dt>표기</dt><dd><span lang="en">'+it.__mk.map(function(k){ return esc(markEn(a,k)) }).join(' · ')+'</span> <span class="basis">상품명</span></dd>':'')+
     '<dt>판매처</dt><dd>'+esc(it.r)+'</dd>'+
     p.dutyHtml(it)+
     (p.aucText(it)?'<dt>경매</dt><dd>'+esc(p.aucText(it))+(p.endText(it)?' <span class="basis">'+esc(p.endText(it))+' 마감 · 수집 시점 기준</span>':'')+'</dd>':'')+
@@ -1606,9 +1896,9 @@ function detailHtml(it,lo){
        : stop?esc(kday(it.f))+' – '+esc(kday(SRCSEEN[a][it.r]))+' <span class="basis">'+esc(md(SRCSEEN[a][it.r]))+' 이후 수집 안 됨</span>'
        : esc(kday(it.f))+'부터'+(seen?' <span class="basis">'+esc(seen)+'</span>':''))+'</dd>':'');
   var offers='';
-  if(it.g>1 && Array.isArray(it.v)){
+  if(it.g>1 && Array.isArray(it.v) && it.v.length){
     var ks=it.v.map(function(v){ return v.k }), lo=Math.min.apply(null,ks), hi=Math.max.apply(null,ks), spread=hi>lo;
-    offers='<details class="acc offers" open><summary>Same title · '+won(it.g)+' sources</summary><div class="acc-b">'+it.v.slice().sort(function(x,y){ return x.k-y.k }).map(function(v){
+    offers='<details class="acc offers" open><summary lang="en">Same title · '+won(it.g)+' sources</summary><div class="acc-b">'+it.v.slice().sort(function(x,y){ return x.k-y.k }).map(function(v){
       var u=okUrl(v.l); if(!u) return '';
       return '<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer"'+(spread&&v.k===lo?' class="lo"':'')+'>'+
         '<span class="o-ph">'+(v.i?imgTag(a,v.i,160):'')+'</span>'+
@@ -1619,31 +1909,33 @@ function detailHtml(it,lo){
   var hist=p.histHtml(it), comps=p.compsHtml(it), st=statusFl(it);
   var tags=it.__m.map(function(k){ return '<button type="button" class="tag" data-motif="'+esc(k)+'">'+esc(motifEn(a,k))+'</button>' }).join('');
   var thumbs=ph.length>1?'<div class="ths" role="group" aria-label="Photographs">'+ph.map(function(u,i){ return '<button type="button" data-ph="'+i+'" aria-label="Photograph '+(i+1)+'"'+(i===0?' aria-current="true"':'')+'>'+imgTag(a,u,160)+'</button>' }).join('')+'</div>':'';
-  return '<div class="dv-top">'+
+  // the brand line leads to its room (not when the room is the page underneath)
+  var inRoom=ST.view==='room' && ST.a===a, nm=inRoom?esc(A.name):'<a href="'+roomHref(a)+'">'+esc(A.name)+'</a>';
+  return '<div class="dv-top" lang="en">'+
       '<span class="dv-tag"><span class="nm-l">'+esc(A.name)+'</span><span class="nm-s">'+esc(A.short)+'</span></span>'+
-      '<span class="dv-pos" aria-live="polite">'+pos+'</span>'+
+      '<span class="dv-pos">'+pos+'</span>'+
       '<span class="dv-nav">'+
-        '<button type="button" class="ico" data-step="-1" aria-label="Previous listing"'+(DV.idx>0?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5 8 12l7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
-        '<button type="button" class="ico" data-step="1" aria-label="Next listing"'+(DV.list&&DV.idx>=0&&DV.idx<DV.list.length-1?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
+        '<button type="button" class="ico" data-step="-1" aria-label="Previous listing"'+(idx>0?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5 8 12l7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
+        '<button type="button" class="ico" data-step="1" aria-label="Next listing"'+(list&&idx>=0&&idx<list.length-1?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
         '<button type="button" class="dv-x" data-close><span>Close</span><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.3"/></svg></button>'+
       '</span></div>'+
     '<div class="dv-body">'+
       '<div class="dv-pic'+(ph.length?'':' dead')+'">'+(ph.length?'<div class="dv-main">'+mainImg(a,ph[0],it.t,lo)+(ph.length>1?'<span class="pn" id="dvPn">1 / '+ph.length+'</span>':'')+'</div>':'')+thumbs+'</div>'+
       '<div class="dv-info">'+
-        '<div class="vd"><span class="at">'+esc(A.name)+'</span>'+yearPart(it)+'</div>'+
+        '<div class="vd"><span class="at" lang="en">'+nm+'</span>'+yearPart(it)+'</div>'+
         '<h2 id="dvT"'+tl(it)+'>'+esc(it.t)+'</h2>'+
-        p.priceHtml(it,true)+
-        (st?'<div class="fl">'+st+'</div>':'')+
-        (tags?'<div class="tags">'+tags+'</div>':'')+
-        '<div class="acts">'+
+        wasSr(p.priceHtml(it,true))+
+        (st?'<div class="fl" lang="en">'+st+'</div>':'')+
+        (tags?'<div class="tags" lang="en">'+tags+'</div>':'')+
+        '<div class="acts" lang="en">'+
           (link?'<a class="btn solid" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">'+(it.so?'View record':'View listing')+'<span class="arr" aria-hidden="true">↗</span></a>':'')+
           (bee?'<a class="btn" href="'+esc(bee)+'" target="_blank" rel="noopener noreferrer">Buy via proxy<span class="arr" aria-hidden="true">↗</span></a>':'')+
           '<button type="button" class="btn sv-b'+(on?' on':'')+'" data-save="'+it.__k+'" aria-pressed="'+on+'">'+saveBtnInner(on)+'</button>'+
           '<button type="button" class="btn" data-copy>Copy link</button>'+
         '</div>'+
-        '<details class="acc" open><summary>Details</summary><div class="acc-b"><dl class="kv">'+kv+'</dl></div></details>'+
-        (hist?'<details class="acc"><summary>Price history</summary><div class="acc-b">'+hist+'</div></details>':'')+
-        (comps?'<details class="acc"><summary>Sold records</summary><div class="acc-b">'+comps+'</div></details>':'')+
+        '<details class="acc" open><summary lang="en">Details</summary><div class="acc-b"><dl class="kv">'+kv+'</dl></div></details>'+
+        (hist?'<details class="acc"><summary lang="en">Price history</summary><div class="acc-b">'+hist+'</div></details>':'')+
+        (comps?'<details class="acc"><summary lang="en">Sold records</summary><div class="acc-b">'+comps+'</div></details>':'')+
         offers+
       '</div>'+
     '</div>';
@@ -1655,7 +1947,7 @@ function mainImg(a,u,alt,lo){
     ' alt="'+esc(alt||'')+'" fetchpriority="high" decoding="async">';
 }
 function showPhoto(i){
-  var it=DV.it; if(!it) return; var ph=P[it.__a].photosOf(it), u=okUrl(ph[i]); if(!u) return;
+  var it=DV.it; if(!it) return; var ph=phs(it), u=ph[i]; if(!u) return;
   var im=$('dvImg'); if(im){ im.classList.remove('on'); im.removeAttribute('data-b'); im.removeAttribute('data-hi'); var t=thumb(it.__a,u,1200); im.src=t; if(t!==u) im.setAttribute('data-full',u); else im.removeAttribute('data-full'); bindImgs($('dv')) }
   DV.ph=i; lensOff(true);
   var pn=$('dvPn'); if(pn) pn.textContent=(i+1)+' / '+ph.length;
@@ -1673,7 +1965,7 @@ $('ov').addEventListener('pointerdown',function(e){ if(e.pointerType!=='touch' |
 $('ov').addEventListener('pointercancel',function(){ SW=null },{passive:true});
 $('ov').addEventListener('pointerup',function(e){
   if(!SW || !DV.it) { SW=null; return } var dx=e.clientX-SW.x, dy=e.clientY-SW.y; SW=null;
-  var n=P[DV.it.__a].photosOf(DV.it).length;
+  var n=phs(DV.it).length;
   if(n>1 && Math.abs(dx)>48 && Math.abs(dx)>Math.abs(dy)*1.4) showPhoto(((DV.ph||0)+(dx<0?1:-1)+n)%n);
 },{passive:true});
 $('ov').addEventListener('click',function(e){
@@ -1688,18 +1980,20 @@ $('ov').addEventListener('click',function(e){
 });
 
 /* ---------------------------------------------------------------- search across both */
-var SQT=null, SRES=[], SSEL=-1;
+var SQT=null, SRES=[], SSEL=-1, SOPEN=null;
 function openSearch(){
   var s=$('search'); if(!s.hidden) { $('sq').focus(); return }
-  closeDrawer();
+  closeDrawer(true); var sd=$('side'); if(sd && sd.classList.contains('open')) sideOpen(false);
+  SOPEN=doc.activeElement;
   s.hidden=false; root.classList.add('lock'); requestAnimationFrame(function(){ s.classList.add('open') });
+  inert(true);
   $('searchBtn').setAttribute('aria-expanded','true');
   var q=$('sq'); q.value=ST.view==='room'?ST.F.q:''; q.focus(); q.select();
   AS.forEach(function(a){ if(!DATA[a] && !FAIL[a]) load(a).then(runSearch,function(){ runSearch() }) });
   if(BIDX===null) bidx().then(function(){ runSearch() });
   runSearch();
   var hint=hints();
-  $('sHint').innerHTML='<span class="lbl">Try</span>'+hint.map(function(h){ return '<button type="button" data-hint="'+esc(h)+'">'+esc(h)+'</button>' }).join('');
+  $('sHint').innerHTML='<span class="lbl" lang="en">Try</span>'+hint.map(function(h){ return '<button type="button" data-hint="'+esc(h)+'">'+esc(h)+'</button>' }).join('');
 }
 function hints(){
   var h=['bondage','1998','ボンデージ','드립'];
@@ -1708,69 +2002,89 @@ function hints(){
 }
 function closeSearch(silent){
   var s=$('search'); if(s.hidden) return;
-  s.classList.remove('open'); root.classList.remove('lock');
+  s.classList.remove('open'); root.classList.remove('lock'); inert(false);
   $('searchBtn').setAttribute('aria-expanded','false');
   var fin=function(){ if(!s.classList.contains('open')) s.hidden=true };
   if(REDUCED.matches) fin(); else setTimeout(fin,200);
-  if(!silent) $('searchBtn').focus();
+  // back to whatever opened it ("/" from a card returns to that card), else the search button
+  var r=SOPEN; SOPEN=null;
+  if(!silent){ var t=r && r!==doc.body && r!==root && r.focus && doc.contains(r) ? r : $('searchBtn'); try{ t.focus() }catch(e){} }
+  $('sStat').textContent='';
 }
-// brand names that answer the query: the start of a name first, then the start of a word in it, then anywhere in it;
-// letters only (so rickowens, Rick-Owens and RICK OWENS are one), accents and widths folded
+// Brand names that answer the query: the start of a name first, then the start of a word in it, then anywhere in it;
+// letters only (so rickowens, Rick-Owens and RICK OWENS are one), accents and widths folded. A query that begins with a
+// name and goes on (guidi boots, リックオウエンス ジャケット) is that brand, searched for the rest in its own room.
 function bfold(s){ return fold(s).toLowerCase().replace(/[^\p{L}\p{N}\p{M}]+/gu,' ').trim() }
+// what the query says after a name, in the reader's own characters (not the folded ones the match was made on)
+function restAfter(q,tc){
+  var acc='', i=0;
+  while(i<q.length && acc.length<tc.length){ var c=q.codePointAt(i), ch=String.fromCodePoint(c); acc+=bfold(ch).replace(/ /g,''); i+=ch.length }
+  return acc===tc ? q.slice(i).replace(/^[\s\-_.,/·:|]+/,'').trim() : null;
+}
 function brandHits(q){
-  if(!BIDX) return [];
   var f=bfold(q), fc=f.replace(/ /g,''); if(!fc || (fc.length<2 && /^[\x00-\x7f]+$/.test(fc))) return [];
   var out=[];
   brandList().forEach(function(x){ if(!x.href) return;
-    var best=0;
-    [x.name].concat(x.al||[]).forEach(function(n){ var t=bfold(n), tc=t.replace(/ /g,''), sc=0;
-      if(tc.indexOf(fc)===0) sc=3; else if((' '+t).indexOf(' '+f)>=0) sc=2; else if(tc.indexOf(fc)>=0) sc=1;
-      if(sc>best) best=sc });
-    if(best) out.push({x:x, sc:best});
+    var best=0, rest='';
+    [x.name].concat(x.al||[]).forEach(function(n){ var t=bfold(n), tc=t.replace(/ /g,''), sc=0, r='';
+      if(!tc) return;
+      if(fc===tc) sc=5;
+      else if(f.length>t.length && f.indexOf(t+' ')===0){ sc=4; r=f.slice(t.length+1) }
+      else if(/[^\x00-\x7f]/.test(tc) && fc.length>tc.length && fc.indexOf(tc)===0){ sc=4; r=fc.slice(tc.length) }
+      else if(tc.indexOf(fc)===0) sc=3; else if((' '+t).indexOf(' '+f)>=0) sc=2; else if(tc.indexOf(fc)>=0) sc=1;
+      if(sc===4){ var own0=restAfter(q,tc); if(own0) r=own0; else if(r.normalize) r=r.normalize('NFC') }
+      // (the longest name that begins the query leaves the shortest rest)
+      if(sc>best || (sc===4 && best===4 && r.length<rest.length)){ best=sc; rest=r } });
+    if(best) out.push({x:x, sc:best, rest:rest.trim().slice(0,80)});
   });
-  return out.sort(function(p,q2){ return q2.sc-p.sc || (q2.x.n||0)-(p.x.n||0) || cmpName({n:p.x.name},{n:q2.x.name}) }).map(function(r){ return r.x });
+  return out.sort(function(p,q2){ return q2.sc-p.sc || (q2.x.n||0)-(p.x.n||0) || cmpName({n:p.x.name},{n:q2.x.name}) });
 }
-function brandHitsHtml(q){
-  var L=brandHits(q); if(!L.length) return '';
-  return '<section class="sr-g sr-bg"><h3>Brands<span class="n">'+won(L.length)+'</span></h3><ul>'+L.slice(0,6).map(function(x){
+function brandHitsHtml(L){
+  if(!L.length) return '';
+  return '<section class="sr-g sr-bg"><h3 lang="en">Brands <span class="n">'+won(L.length)+'</span></h3><ul>'+L.slice(0,6).map(function(r){ var x=r.x;
     var ph=x.ph || (DATA[x.a] ? (heroPick(x.a,DATA[x.a],'search')||{}).i : '');
-    return '<li><a class="sr-i sr-bi" href="'+x.href+'"><span class="sr-ph">'+imgTag(x.a,ph,160)+'</span><span class="sr-t">'+esc(x.name)+'</span>'+
-      '<span class="sr-p">'+(x.n?won(x.n)+' '+(x.n===1?'Item':'Items'):'')+'</span></a></li>' }).join('')+'</ul></section>';
+    var href=x.href+(r.rest?'&q='+encodeURIComponent(r.rest):'');
+    return '<li><a class="sr-i sr-bi" href="'+esc(href)+'"><span class="sr-ph">'+imgTag(x.a,ph,160)+'</span><span class="sr-t" lang="en">'+esc(x.name)+'</span>'+
+      '<span class="sr-p">'+(r.rest?'“'+esc(r.rest)+'”':x.n?'<span lang="en">'+won(x.n)+' '+(x.n===1?'Item':'Items')+'</span>':'')+'</span></a></li>' }).join('')+'</ul></section>';
 }
 function runSearch(){
   var s=$('search'); if(s.hidden) return;
   var q=$('sq').value.replace(/\s+/g,' ').trim().toLowerCase().slice(0,80), out=$('sres');
   SRES=[]; SSEL=-1;
-  if(!q){ out.innerHTML=''; return }
-  var h=brandHitsHtml(q);
+  if(!q){ out.innerHTML=''; $('sStat').textContent=''; return }
+  var bh=brandHits(q), h=brandHitsHtml(bh), items=0, loading=false;
   AS.forEach(function(a){
-    var A=ARCH[a], d=DATA[a];
-    h+='<section class="sr-g"><h3>'+esc(A.name)+'<span class="n" id="srn-'+a+'"></span></h3>';
-    if(!d){ h+='<p class="sr-m">'+(FAIL[a]?'Could not load':'Loading')+'</p></section>'; return }
+    var A=ARCH[a], d=DATA[a], head='<section class="sr-g"><h3 lang="en">'+esc(A.name)+' ';
+    if(!d){ if(!FAIL[a]) loading=true; h+=head+'</h3><p class="sr-m" lang="en">'+(FAIL[a]?'Could not load':'Loading')+'</p></section>'; return }
     var p=P[a], F=blankF(); F.q=q; p.setF(F); p.setQuery(q);
     var QT=p.getQT(), res=[];
     if(QT.length) d.items.forEach(function(it){ if(it.x || it.so || it.__bad) return; var sc=p.score(it); if(sc>0) res.push([sc,it]) });
     res.sort(function(x,y){ return y[0]-x[0] || y[1].k-x[1].k });
     // hand the room back its own query
     if(ST.view==='room' && ST.a===a){ p.setF(ST.F); p.setQuery(ST.F.q) }
+    // a query that is only this archive's own name is answered under Brands; nothing here while a brand answers: the brand
+    if(!QT.length || (!res.length && bh.length)) return;
+    if(!res.length){ h+=head+'</h3><p class="sr-m" lang="en">No results</p></section>'; return }
+    items+=res.length;
     var st={view:'room', a:a, F:F, sort:'rel', item:null};
-    if(!res.length){ h+='<p class="sr-m">'+(QT.length?'No results':'Brand names are not search terms')+'</p></section>'; return }
-    h=h.replace('<span class="n" id="srn-'+a+'"></span>','<span class="n">'+won(res.length)+'</span>');
-    h+='<ul>'+res.slice(0,5).map(function(r){ var it=r[1], ph=p.photosOf(it)[0]; SRES.push({it:it, q:q});
+    h+=head+'<span class="n">'+won(res.length)+'</span></h3><ul>'+res.slice(0,5).map(function(r){ var it=r[1], ph=phs(it)[0]; SRES.push({it:it, q:q});
       var st2={view:'room', a:a, F:F, sort:'rel', item:it.__k};
       return '<li><a class="sr-i" href="'+esc(hrefOf(st2))+'" data-sri="'+(SRES.length-1)+'">'+
         '<span class="sr-ph">'+imgTag(a,ph,160)+'</span><span class="sr-t"'+tl(it)+'>'+esc(it.t)+'</span>'+
         '<span class="sr-p">₩'+won(it.k)+(it.__e?' · '+esc(it.__e):'')+' · '+esc(it.r)+'</span></a></li>' }).join('')+'</ul>'+
-      '<a class="sr-all" href="'+esc(hrefOf(st))+'">View all '+won(res.length)+'<span class="arr" aria-hidden="true">→</span></a></section>';
+      '<a class="sr-all" href="'+esc(hrefOf(st))+'" lang="en">View all '+won(res.length)+'<span class="arr" aria-hidden="true">→</span></a></section>';
   });
   out.innerHTML=h; bindImgs(out);
+  // one short line for a screen reader, not the whole list again
+  $('sStat').textContent=loading&&!bh.length&&!items?'Loading':(bh.length||items)?[bh.length?won(bh.length)+(bh.length===1?' brand':' brands'):'',items?won(items)+(items===1?' item':' items'):''].filter(Boolean).join(' · '):'No results';
 }
 $('searchBtn').addEventListener('click',openSearch);
 $('sq').addEventListener('input',function(){ clearTimeout(SQT); SQT=setTimeout(runSearch,160) });
 $('sq').addEventListener('keydown',function(e){
   var items=$('sres').querySelectorAll('a.sr-i, a.sr-all');
   if(e.key==='ArrowDown' || e.key==='ArrowUp'){ if(!items.length) return; e.preventDefault(); SSEL=(SSEL+(e.key==='ArrowDown'?1:-1)+items.length)%items.length; items[SSEL].focus(); return }
-  if(e.key==='Enter'){ var first=$('sres').querySelector('a.sr-all')||$('sres').querySelector('a.sr-bi'); if(first){ e.preventDefault(); first.click() } }
+  // Enter: the first answer — a brand when a brand answers, else the first archive's whole list
+  if(e.key==='Enter'){ var first=$('sres').querySelector('a.sr-bi')||$('sres').querySelector('a.sr-all'); if(first){ e.preventDefault(); first.click() } }
 });
 $('sres').addEventListener('keydown',function(e){
   if(e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
@@ -1783,8 +2097,11 @@ $('search').addEventListener('click',function(e){
 });
 
 /* ---------------------------------------------------------------- drawer (phone menu) */
-function openDrawer(){ var d=$('drawer'); d.hidden=false; root.classList.add('lock'); nextFrame(function(){ d.classList.add('open') }); $('menuBtn').setAttribute('aria-expanded','true'); var x=d.querySelector('[data-close]'); if(x) x.focus() }
-function closeDrawer(silent){ var d=$('drawer'); if(d.hidden) return; d.classList.remove('open'); root.classList.remove('lock'); $('menuBtn').setAttribute('aria-expanded','false');
+// (the page behind the menu is out of reach while it is open)
+function menuInert(on){ [$('top'),$('main'),$('foot'),doc.querySelector('.skip')].forEach(function(el){ if(!el) return;
+  if(on){ el.setAttribute('inert',''); el.setAttribute('aria-hidden','true') } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden') } }) }
+function openDrawer(){ var d=$('drawer'); d.hidden=false; root.classList.add('lock'); menuInert(true); nextFrame(function(){ d.classList.add('open') }); $('menuBtn').setAttribute('aria-expanded','true'); var x=d.querySelector('[data-close]'); if(x) x.focus() }
+function closeDrawer(silent){ var d=$('drawer'); if(d.hidden) return; d.classList.remove('open'); root.classList.remove('lock'); menuInert(false); $('menuBtn').setAttribute('aria-expanded','false');
   var fin=function(){ if(!d.classList.contains('open')) d.hidden=true }; if(REDUCED.matches) fin(); else setTimeout(fin,360); if(!silent) $('menuBtn').focus() }
 $('menuBtn').addEventListener('click',openDrawer);
 (function(){ var ar=$('arch'); if(!ar) return;
@@ -1793,6 +2110,9 @@ $('menuBtn').addEventListener('click',openDrawer);
   // closed with Escape: open again when focus moves to another item or leaves the menu (a click waits for the pointer to leave)
   ar.addEventListener('focusin',function(e){ var m=e.target.closest && e.target.closest('.mm'); if(ar.__esc && m!==ar.__esc) on() });
   ar.addEventListener('focusout',function(e){ if(ar.__esc && !ar.contains(e.relatedTarget)) on() });
+  // a panel the pointer leaves while a link in it has the focus: the focus goes to the menu item, not to nowhere
+  [].forEach.call(ar.querySelectorAll('.mm'),function(m){ m.addEventListener('mouseleave',function(){
+    var pn=m.querySelector('.mm-p'); if(pn && pn.contains(doc.activeElement)){ var l=m.querySelector('a'); if(l) try{ l.focus({preventScroll:true}) }catch(x){} } }) });
 })();
 $('drawer').addEventListener('click',function(e){ if(e.target.closest('[data-close]')) closeDrawer() });
 
@@ -1804,11 +2124,17 @@ doc.addEventListener('click',function(e){
   if(sk){ var tid=(sk.getAttribute('href')||'').replace(/^#/,''), tg=$(tid); if(tg){ e.preventDefault(); if(!tg.hasAttribute('tabindex')) tg.setAttribute('tabindex','-1'); tg.focus({preventScroll:true});
       var y=tg.getBoundingClientRect().top+window.scrollY-(tid==='listH'?140:0); window.scrollTo(0,Math.max(0,y)) } return }
   var mmp=e.target.closest('.mm-p'); if(mmp){ var ar0=$('arch'); if(ar0) ar0.classList.add('mm-off'); if(doc.activeElement && mmp.contains(doc.activeElement)) doc.activeElement.blur() }
-  var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry'); if(ra==='brx'){ if(BIDX===false) BIDX=null } else delete FAIL[ra]; refresh(); if(ST.view==='home') homeUpdate(GEN); return }
+  var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry');
+    if(ra==='brx'){ BIDX=null; BERR=false; if(BNEW===false) BNEW=null;
+      // a brand address that could not open: try the whole way again
+      if(MOUNTED.indexOf('down:')===0){ MOUNTED=''; route(ST); return } }
+    else delete FAIL[ra];
+    WAITED={}; refresh(); return }
+  var azt=e.target.closest('[data-azt]'); if(azt){ AZTAB=azt.getAttribute('data-azt'); azTabs(); return }
   var tt=e.target.closest('[data-tt]'); if(tt){ TODAYTAB=tt.getAttribute('data-tt'); var tb=$('todayT').querySelectorAll('[data-tt]');
     for(var ti=0;ti<tb.length;ti++) tb[ti].setAttribute('aria-pressed',String(tb[ti]===tt)); todayPaint(); return }
   var nt=e.target.closest('[data-nt]'); if(nt){ if(nt.disabled) return; NEWTAB=nt.getAttribute('data-nt'); newUpdate(GEN); return }
-  if(e.target.closest('#nmoreBtn')){ newPaint(false); return }
+  if(e.target.closest('#nmoreBtn')){ var n0=NEWSHOWN; newPaint(false); landOn($('ngrid'),n0); live(won(NEWSHOWN-n0)+' more · '+won(NEWSHOWN)+' of '+won(NEWLIST.length)); return }
   var az=e.target.closest('[data-az]'); if(az){ var at=$('az-'+az.getAttribute('data-az')); if(at){ e.preventDefault();
     var h2=at.querySelector('h2'); if(h2){ h2.setAttribute('tabindex','-1'); h2.focus({preventScroll:true}) }
     window.scrollTo(0,Math.max(0,at.getBoundingClientRect().top+window.scrollY-($('top').offsetHeight+24))) } return }
@@ -1829,12 +2155,15 @@ doc.addEventListener('click',function(e){
 doc.addEventListener('keydown',function(e){
   var t=e.target, tag=(t.tagName||'').toLowerCase(), typing=tag==='input'||tag==='textarea'||tag==='select'||t.isContentEditable;
   if(e.key==='Escape'){
+    if(PVK) pvHide();
     var ar=$('arch'), mmx=ar && doc.activeElement && doc.activeElement.closest && doc.activeElement.closest('.mm');
     if(mmx && ar.contains(mmx)){ e.preventDefault(); ar.classList.add('mm-off'); ar.__esc=mmx; mmx.querySelector('a').focus(); return }
     if(!$('search').hidden){ e.preventDefault(); closeSearch(); return }
     if(DV.it){ e.preventDefault(); closeByUser(); return }
     if(!$('drawer').hidden){ e.preventDefault(); closeDrawer(); return }
     var sd=$('side'); if(sd && sd.classList.contains('open')){ e.preventDefault(); sideOpen(false); return }
+    // a menu panel the pointer opened goes away with Escape too, wherever the focus is
+    if(ar && ar.querySelector('.mm:hover')){ e.preventDefault(); ar.classList.add('mm-off') }
     return;
   }
   if(e.metaKey||e.ctrlKey||e.altKey) return;
@@ -1847,7 +2176,7 @@ doc.addEventListener('keydown',function(e){
 function trap(e){
   var sd=$('side'), box=DV.it?$('dv'):!$('search').hidden?$('search').querySelector('.so-in'):!$('drawer').hidden?$('drawer'):(sd && sd.classList.contains('open'))?sd:null;
   if(!box) return;
-  var f=[].slice.call(box.querySelectorAll('a[href],button:not([disabled]),input,select,[tabindex]:not([tabindex="-1"])')).filter(function(x){ return x.offsetParent!==null || x===doc.activeElement });
+  var f=[].slice.call(box.querySelectorAll('a[href],button:not([disabled]),input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')).filter(function(x){ return x.offsetParent!==null || x===doc.activeElement });
   if(!f.length) return;
   var first=f[0], last=f[f.length-1];
   if(!box.contains(doc.activeElement)){ e.preventDefault(); first.focus(); return }
@@ -1870,7 +2199,7 @@ doc.addEventListener('pointermove',function(e){
   if(!r || DV.it || !fxOn()){ if(PVK) pvHide(); return }
   PVX=e.clientX; PVY=e.clientY;
   var k=r.getAttribute('data-k');
-  if(k!==PVK){ var it=itemOfEl(r), u=it && okUrl(P[it.__a].photosOf(it)[0]); if(!u){ pvHide(); return }
+  if(k!==PVK){ var it=itemOfEl(r), u=it && phs(it)[0]; if(!u){ pvHide(); return }
     var el=pvEl(), im=el.firstChild, first=!el.classList.contains('on'); PVK=k; im.src=okUrl(thumb(it.__a,u,600))||u;
     if(first){ pvMove(); nextFrame(function(){ if(PVK===k) el.classList.add('on') }) } }
   if(!PVR) PVR=requestAnimationFrame(pvMove);
@@ -1908,16 +2237,17 @@ megaMenus();
 ST=readUrl(location.search);
 if(ST.view!=='room') writeUrl(false);
 if(ST.view==='home'){ AS.forEach(function(a){ load(a).catch(function(){}) }) }
+// a brand room opened by its address asks for its own file now, beside the brand index, not after it
+if(ST.view==='room' && isB(ST.a)){ var ea=ST.a; EARLY[ea]=getJSON('/BRAND/b/'+slugOf(ea)+'.json'); EARLY[ea].catch(function(){}); bengine().catch(function(){}) }
 route(null);   // mount, update, open the listing in the address — a brand room once the brand index is here
-bidx();        // the brand index, small, asked for after the room's own data
-// the other archive, quietly, so switching rooms is instant — but only after the room being read has its
-// own data: on a slow line the two downloads would otherwise share it and the first cards come later
+bidx();        // the brand index, small
+// From an archive's room, the other archive's page is asked for quietly (low priority, into the browser's cache) once the
+// room has its own data, so switching rooms does not wait on the line; it is read when its room opens. A brand room and
+// the brand list ask for neither archive: they show neither.
 var SAVE=navigator.connection && navigator.connection.saveData;
-function prefetch(){ AS.forEach(function(a){ if(!DATA[a] && !PEND[a] && !FAIL[a]) load(a).then(drawerMeta,function(){}) }) }
-if(!SAVE){ var first=ST.view!=='room' ? null : !isB(ST.a) ? PEND[ST.a] :
-    bidx().then(function(){ return ST.view==='room' && own.call(ARCH,ST.a) ? load(ST.a) : null });
-  if(first) first.then(function(){ setTimeout(prefetch,600) },function(){ setTimeout(prefetch,600) });
-  else setTimeout(prefetch,1500) }
+function warm(){ if(ST.view!=='room' || isB(ST.a)) return;
+  AS.forEach(function(a){ if(a!==ST.a && !DATA[a] && !PEND[a] && !FAIL[a]) req(ARCH[a].path,{low:true},'none').catch(function(){}) }) }
+if(!SAVE && ST.view==='room' && !isB(ST.a) && PEND[ST.a]) PEND[ST.a].then(function(){ setTimeout(warm,600) },function(){});
 if(DATA.hl || DATA.ccp) drawerMeta();
 AS.forEach(function(a){ if(PEND[a]) PEND[a].then(drawerMeta,function(){}) });
 })();
