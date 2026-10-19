@@ -72,7 +72,11 @@ Helmut Lang(1986–2005)과 Carol Christian Poell 두 아카이브, 그리고 �
     영어 UI에 `lang="en"` · 지운 가격은 "was" · 사진 띠 위 글 대비(어둡게 .56) · 처음 화면 방 링크 포커스 링 · 체크 상자 테두리 `--dim`
   - **SEO** 고정 canonical 지움(스크립트가 화면마다 씀) · 화면마다 description · Saved는 noindex · WebSite JSON-LD · sitemap에 Brands · New in · robots `Disallow: /tools/` ·
     `referrer no-referrer` · 한글 글꼴 preload 낮은 우선순위 · manifest theme_color #000
-  - 검사: `tools/suite_v6.cjs`(64) — 위 항목을 픽스처를 바꿔 끼워 확인(가짜 통화 · 구멍 난 offers · 503 색인 · 큰 브랜드 6,800개 · 브랜드 9곳 저장 · 10개 방 메모리 · 떠날 때 멈춤)
+  - **두 번째 점검(코드 · 접근성 리뷰)** 처음 화면에서 연 브랜드 매물도 주소로 다시 열림 · 뒤로가기로 돌아온 상세는 같은 목록의 같은 자리 ·
+    층(상세 · 검색 · 메뉴 · 서랍)의 inert와 스크롤 잠금은 `layers()` 한 곳 · 검색 Enter는 이름이 맞는 브랜드만(그 밖은 목록) · 저장에서 지우면 다음 매물로 포커스
+  - **실제 데이터 미리보기(PC)에서 고친 것** 처음 화면 New today · Price drops에서 다시 올린 매물(제목 · 가격 · 사이즈 · 판매처가 같음)은 한 자리만 —
+    탭의 수와 New in은 매물 그대로 · 검색의 Try 줄은 결과가 없을 때만 · 필터 연도의 No year 한 줄
+  - 검사: `tools/suite_v6.cjs`(85) — 위 항목을 픽스처를 바꿔 끼워 확인(가짜 통화 · 구멍 난 offers · 503 색인 · 큰 브랜드 6,800개 · 브랜드 9곳 저장 · 10개 방 메모리 · 떠날 때 멈춤 · 다시 올린 매물)
 - **배포** 빌드 단계 없음. `main` 브랜치 루트가 그대로 GitHub Pages로 나간다.
 
 | 파일 | 하는 일 |
