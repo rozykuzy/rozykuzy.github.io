@@ -972,13 +972,21 @@ function todayUpdate(gen){
   edges();
   todayPaint(); focusBack(fm);
 }
+// a piece listed again (same title, price, size and site: a relisting) takes one place in the front page's short rows;
+// the lists behind them keep every listing
+function once(list){
+  var seen={};
+  return list.filter(function(it){ var k=[String(it.t||'').replace(/\s+/g,' ').trim().toLowerCase(), it.k, it.z||'', it.r||''].join('\u0001');
+    if(own.call(seen,k)) return false; seen[k]=1; return true });
+}
 function todayPaint(){
   var g=$('tgrid'); if(!g) return;
   var per=TODAYPER, out=[], src=TODAYSRC;
   if(TODAYTAB==='all'){
     // one from each in turn (the first row shows all of them), sixteen at most
-    for(var i=0;i<16 && out.length<16;i++) src.forEach(function(a){ var x=(per[a]||[])[i]; if(x && out.length<16) out.push(x) });
-  } else out=(per[TODAYTAB]||[]).slice(0,16);
+    var lists=src.map(function(a){ return once(per[a]||[]) });
+    for(var i=0;i<16 && out.length<16;i++) lists.forEach(function(l){ var x=l[i]; if(x && out.length<16) out.push(x) });
+  } else out=once(per[TODAYTAB]||[]).slice(0,16);
   TODAYLIST=out;
   var bad=AS.filter(function(a){ return FAIL[a] }).map(function(a){ return esc(ARCH[a].name)+' · Could not load' });
   if(!out.length){ g.classList.add('none'); g.innerHTML='<p class="none-t" lang="en">'+(bad.length?bad.join(' · '):'Nothing new today')+'</p>'; return }
@@ -1001,7 +1009,7 @@ function dropsUpdate(gen){
   var shown=all.filter(function(it){ return (it.__c==='A' || it.__c==='B') && it.k>=100000 });
   if(shown.length<8) shown=all;
   shown.sort(function(x,y){ var dx=cutDay(x), dy=cutDay(y); if(dx!==dy) return dy>dx?1:-1; return (y.w-y.k)/y.w-(x.w-x.k)/x.w });
-  DROPLIST=shown.slice(0,8);
+  DROPLIST=once(shown).slice(0,8);
   $('dropsL').innerHTML=AS.map(function(a){ return per[a]?'<a class="btn" href="/?archive='+a+'&amp;show=drop&amp;sort=drop">'+esc(ARCH[a].name)+'<sup>'+won(per[a])+'</sup></a>':'' }).join('');
   l.innerHTML=DROPLIST.map(function(it){ return card(it,{tag:true, ctx:{drop:1}}) }).join('');
   bindImgs(l); box.hidden=false;
@@ -2063,7 +2071,8 @@ function runSearch(){
   var s=$('search'); if(s.hidden) return;
   var q=$('sq').value.replace(/\s+/g,' ').trim().toLowerCase().slice(0,80), out=$('sres');
   SRES=[]; SSEL=-1;
-  if(!q){ out.innerHTML=''; $('sStat').textContent=''; return }
+  // (the suggestions stand in for results: there while there are none)
+  if(!q){ out.innerHTML=''; $('sStat').textContent=''; $('sHint').hidden=false; return }
   var bh=brandHits(q), h=brandHitsHtml(bh), items=0, loading=false;
   AS.forEach(function(a){
     var A=ARCH[a], d=DATA[a], head='<section class="sr-g"><h3 lang="en">'+esc(A.name)+' ';
@@ -2086,7 +2095,7 @@ function runSearch(){
         '<span class="sr-p">₩'+won(it.k)+(it.__e?' · '+esc(it.__e):'')+' · '+esc(it.r)+'</span></a></li>' }).join('')+'</ul>'+
       '<a class="sr-all" href="'+esc(hrefOf(st))+'" lang="en">View all '+won(res.length)+'<span class="arr" aria-hidden="true">→</span></a></section>';
   });
-  out.innerHTML=h; bindImgs(out);
+  out.innerHTML=h; bindImgs(out); $('sHint').hidden=!!(bh.length||items);
   // one short line for a screen reader, not the whole list again
   $('sStat').textContent=loading&&!bh.length&&!items?'Loading':(bh.length||items)?[bh.length?won(bh.length)+(bh.length===1?' brand':' brands'):'',items?won(items)+(items===1?' item':' items'):''].filter(Boolean).join(' · '):'No results';
 }

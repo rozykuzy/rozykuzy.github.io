@@ -377,7 +377,7 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
 .yrs{display:grid;grid-template-columns:1fr;padding-left:29px}
 .yb{position:relative;display:grid;grid-template-columns:52px minmax(0,1fr) 44px;align-items:center;gap:10px;height:26px;
   font:400 13px/1 var(--sans);color:var(--mid);text-align:left;font-variant-numeric:tabular-nums}
-.yb span{grid-column:1;text-transform:uppercase;font-size:12px;letter-spacing:.04em}
+.yb span{grid-column:1;text-transform:uppercase;font-size:12px;letter-spacing:.04em;white-space:nowrap}
 .yb i{grid-column:3;font-style:normal;text-align:right;font-size:12px}
 .yb::after{content:'';grid-column:2;grid-row:1;height:2px;width:calc(var(--v,0) * 100%);min-width:2px;background:var(--soft);transition:width .4s var(--out),background-color .2s}
 .yb:hover{color:var(--ink)}

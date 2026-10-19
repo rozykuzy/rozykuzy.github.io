@@ -267,6 +267,39 @@ const json = (rt, body) => rt.fulfill({ status: 200, contentType: 'application/j
       ok(p.errs.length === 0, 'down and back: no errors ' + p.errs.join(' | '));
     } finally { await p.context().close(); srv.close() } }
 
+  // ---------------------------------------------------------------- the preview of 2026-10-20: a relisting, the search's suggestions
+  { console.log('preview'); const p = await H.page(b, { width: 1440, height: 900 });
+    // (the CCP fixture has one jacket listed twice on Grailed the same day: same title, price, size)
+    const keys = (sel) => p.evaluate((sel) => [...document.querySelectorAll(sel + ' .card')].map((c) => c.querySelector('.t').textContent + '|' + c.querySelector('.cap').innerText.replace(/\s+/g, ' ')), sel);
+    const twice = (l) => l.filter((x, i) => l.indexOf(x) !== i);
+    await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 600);
+    let k = await keys('#tgrid');
+    ok(k.length >= 8 && twice(k).length === 0, 'New today on the front page: a relisting takes one place ' + twice(k).join(' / '));
+    await p.click('#todayT [data-tt="ccp"]'); await wait(p, 300);
+    k = await keys('#tgrid');
+    ok(k.length === 10 && twice(k).length === 0, 'and in the CCP tab (11 listings, 10 pieces) ' + k.length);
+    ok(await p.$eval('#todayT [data-tt="ccp"] sup', (s) => s.textContent) === '11', 'the tab still counts listings');
+    await p.goto(H.BASE + '/?view=new'); await H.ready(p); await wait(p, 600);
+    await p.click('#newT [data-nt="ccp"]'); await wait(p, 300);
+    ok((await keys('#ngrid')).length === 11, 'New in keeps every listing');
+    // the suggestions stand in for results: gone while there are some, back when there are none
+    await p.keyboard.press('/'); await wait(p, 300);
+    const hint = () => p.evaluate(() => !document.getElementById('sHint').hidden);
+    ok(await hint(), 'search: suggestions before a word is typed');
+    await p.fill('#sq', 'guidi boots'); await wait(p, 500);
+    ok(!(await hint()), 'search: no suggestions under a brand that answers');
+    await p.fill('#sq', 'bondage'); await wait(p, 500);
+    ok(!(await hint()), 'search: no suggestions under listings');
+    await p.fill('#sq', 'zzqqxxnothing'); await wait(p, 500);
+    ok(await hint(), 'search: suggestions when nothing answers');
+    await p.keyboard.press('Escape'); await wait(p, 300);
+    // the filter's year list: "No year" on one line
+    await p.goto(H.BASE + '/?brand=guidi'); await H.ready(p); await wait(p, 400);
+    await p.click('#ftog'); await wait(p, 500);
+    ok(await p.evaluate(() => { const s = document.querySelector('#f-y .yb.none span'); return !!s && s.getClientRects().length === 1 }), 'the filter: No year on one line');
+    ok(p.errs.length === 0, 'preview: no errors ' + p.errs.join(' | '));
+    await p.context().close(); }
+
   // ---------------------------------------------------------------- a phone: tabs, the brand line, the brands row
   { console.log('phone'); const p = await H.page(b, { width: 360, height: 780 }, { mobile: true, dpr: 2 });
     await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 600);
