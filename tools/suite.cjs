@@ -250,6 +250,21 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     ok(await p.evaluate(() => !document.getElementById('side').classList.contains('open')), 'the shade closes the drawer');
     ok(p.errs.length === 0, 'new/brands: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
+  // ---------------------------------------------------------------- a title keeps its own language
+  { console.log('title language'); const p = await H.page(b, { width: 1440, height: 900 });
+    await p.goto(H.BASE + '/?archive=hl&source=' + encodeURIComponent('메루카리')); await H.ready(p); await wait(p, 400);
+    if (!(await p.$('#grid .card'))) { await p.goto(H.BASE + '/?archive=hl'); await H.ready(p); await wait(p, 400) }
+    const L = await p.evaluate(() => [...document.querySelectorAll('#grid .card .t')].map((h) => { const s = getComputedStyle(h);
+      return { t: h.textContent, lang: h.getAttribute('lang'), lb: s.lineBreak, ff: s.fontFeatureSettings } }));
+    const bad = L.filter((x) => (/[\u3040-\u30ff]/.test(x.t) && !/[\uac00-\ud7af]/.test(x.t) ? 'ja' : /[\uac00-\ud7af]/.test(x.t) ? 'ko' : /[\u3400-\u9fff]/.test(x.t) ? 'ja' : 'en') !== x.lang);
+    ok(L.length > 0 && bad.length === 0, 'every card title says its language ' + L.length + ' ' + JSON.stringify(bad.slice(0, 3)));
+    const ja = L.filter((x) => x.lang === 'ja');
+    ok(ja.every((x) => x.lb === 'strict' && /palt/.test(x.ff)), 'japanese titles: strict line breaks, proportional kana (' + ja.length + ')');
+    ok(L.filter((x) => x.lang === 'en').every((x) => x.lb !== 'strict'), 'latin titles keep the default line breaking');
+    if (ja.length) { await p.click('#grid .card .t[lang="ja"] a'); await wait(p, 600);
+      ok(await p.evaluate(() => document.getElementById('dvT').getAttribute('lang') === 'ja'), 'the listing page title keeps the language') }
+    ok(p.errs.length === 0, 'title language: no errors ' + p.errs.join(' | '));
+    await p.context().close(); }
   console.log('\n' + pass + ' passed, ' + fails.length + ' failed');
   await b.close();
 })();

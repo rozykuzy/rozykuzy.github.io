@@ -200,6 +200,10 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
 .t{margin:0;font:500 13px/1.5 var(--text);letter-spacing:.02em;text-transform:uppercase;color:var(--ink2);overflow-wrap:anywhere;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .t a{text-decoration:none}
+/* a title in Japanese (lang set from its script): Japanese line-break rules, proportional kana, a little more leading */
+.t:lang(ja),.r-t:lang(ja),.sr-t:lang(ja),.dv-info h2:lang(ja){line-break:strict;font-feature-settings:"palt" 1}
+.t:lang(ja){line-height:1.6}
+@supports (text-autospace:normal){ .t:lang(ja),.r-t:lang(ja),.sr-t:lang(ja),.dv-info h2:lang(ja){text-autospace:normal} }
 @media(hover:hover){ .card:hover .t a{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px} }
 .p{margin-top:5px;display:flex;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:0 8px;font:400 13px/1.5 var(--sans);letter-spacing:.02em;color:var(--ink2);font-variant-numeric:tabular-nums}
 .p .alt{color:var(--mid)}
@@ -471,6 +475,7 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
 .dv-info .vd{justify-content:flex-start;margin-bottom:12px;color:var(--mid)}
 .dv-info .vd .at{color:var(--ink)}
 .dv-info h2{margin:0 0 12px;font:500 22px/1.3 var(--text);letter-spacing:.01em;text-transform:uppercase;overflow-wrap:anywhere}
+@supports (word-break:auto-phrase){ .dv-info h2:lang(ja){word-break:auto-phrase;text-wrap:balance} }
 .big{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;font:400 20px/1.6 var(--sans);letter-spacing:.02em;color:var(--ink2);font-variant-numeric:tabular-nums}
 .big .alt{font-size:14px;color:var(--mid)}
 .big .was{font-size:14px;color:var(--mid);text-decoration:line-through;text-decoration-thickness:1px}

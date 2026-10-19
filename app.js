@@ -460,6 +460,11 @@ function statusFl(it){
   if(it.x) o.push('<span>Delisted</span>');
   return o.join('');
 }
+// the language a listing's own title is written in (its script decides), so a Japanese title breaks by Japanese rules,
+// takes Japanese glyph forms and is read by a Japanese voice; Hangul first, since a Korean title may quote kana
+var RE_HANG=/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/, RE_KANA=/[\u3040-\u30ff\u31f0-\u31ff\uff66-\uff9f]/, RE_HAN=/[\u3400-\u9fff]/;
+function tlang(t){ t=t||''; return RE_HANG.test(t)?'ko':(RE_KANA.test(t)||RE_HAN.test(t))?'ja':'en' }
+function tl(it){ return ' lang="'+(it.__lg||(it.__lg=tlang(it.t)))+'"' }
 function card(it,o){
   o=o||{}; var a=it.__a, A=ARCH[a], p=P[a], k=it.__k, on=isSaved(it);
   var ph=p.photosOf(it), ch=o.change?savedChange(it):null, st=statusFl(it);
@@ -468,7 +473,7 @@ function card(it,o){
     '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="Save · '+esc(clip(it.t,40))+'"><i>'+HEART+'</i></button>'+
     '<div class="cap">'+
       '<div class="vd">'+(o.tag?'<span class="at">'+esc(A.name)+'</span>':'')+yearPart(it)+'</div>'+
-      '<h3 class="t"><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
+      '<h3 class="t"'+tl(it)+'><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
       p.priceHtml(it,false)+
       (st?'<div class="fl">'+st+'</div>':'')+
       (ch?'<div class="chg">'+(ch.gone?'Delisted since saved':'Lower since saved '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
@@ -484,7 +489,7 @@ function row(it,i,o){
   return '<article class="row'+(it.x?' gone':'')+'" data-a="'+a+'" data-k="'+k+'">'+
     '<span class="r-no">'+String(i+1).padStart(3,'0')+'</span>'+
     '<span class="ph r-ph" data-open="'+k+'">'+imgTag(a,ph,160)+'</span>'+
-    '<h3 class="r-t"><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
+    '<h3 class="r-t"'+tl(it)+'><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
     '<span class="r-m">'+
       '<span class="r-y'+(y?'':' s')+'">'+(y?esc(y):'연도 미상')+'</span>'+
       (it.z?'<span class="r-z">'+esc(it.z)+'</span>':'')+
@@ -626,7 +631,7 @@ function megaMenus(){
     var ways=[['New today','show=new','new'],['Price drops','show=drop&amp;sort=drop','drop'],['Sold records','show=sold','sold'],['Year old to new','sort=y%2B','']].map(function(w){
       return '<li'+(w[2]==='sold'?' data-mms="'+a+'"':'')+'><a href="/?archive='+a+'&amp;'+w[1]+'">'+esc(w[0])+(w[2]?'<span class="n" data-mmw="'+a+'|'+w[2]+'"></span>':'')+'</a></li>' }).join('');
     el.innerHTML='<div class="mm-in"><div class="mm-c"><p class="mm-h">Category</p><ul class="mm-l two">'+cats+'</ul></div>'+
-      '<div class="mm-c"><p class="mm-h">Show</p><ul class="mm-l">'+ways+'</ul></div>'+
+      '<div class="mm-c"><p class="mm-h">Browse</p><ul class="mm-l">'+ways+'</ul></div>'+
       '<div class="mm-c mm-e"><a class="mm-all" href="/?archive='+a+'">All '+esc(A.name)+'<span class="n" data-mmw="'+a+'|all"></span></a></div></div>';
   });
   var b=$('mm-brands');
@@ -1357,7 +1362,7 @@ function detailHtml(it,lo){
       '<div class="dv-pic'+(ph.length?'':' dead')+'">'+(ph.length?'<div class="dv-main">'+mainImg(a,ph[0],it.t,lo)+(ph.length>1?'<span class="pn" id="dvPn">1 / '+ph.length+'</span>':'')+'</div>':'')+thumbs+'</div>'+
       '<div class="dv-info">'+
         '<div class="vd"><span class="at">'+esc(A.name)+'</span>'+yearPart(it)+'</div>'+
-        '<h2 id="dvT">'+esc(it.t)+'</h2>'+
+        '<h2 id="dvT"'+tl(it)+'>'+esc(it.t)+'</h2>'+
         p.priceHtml(it,true)+
         (st?'<div class="fl">'+st+'</div>':'')+
         (tags?'<div class="tags">'+tags+'</div>':'')+
@@ -1461,7 +1466,7 @@ function runSearch(){
     h+='<ul>'+res.slice(0,5).map(function(r){ var it=r[1], ph=p.photosOf(it)[0]; SRES.push({it:it, q:q});
       var st2={view:'room', a:a, F:F, sort:'rel', item:it.__k};
       return '<li><a class="sr-i" href="'+esc(hrefOf(st2))+'" data-sri="'+(SRES.length-1)+'">'+
-        '<span class="sr-ph">'+imgTag(a,ph,160)+'</span><span class="sr-t">'+esc(it.t)+'</span>'+
+        '<span class="sr-ph">'+imgTag(a,ph,160)+'</span><span class="sr-t"'+tl(it)+'>'+esc(it.t)+'</span>'+
         '<span class="sr-p">₩'+won(it.k)+(it.__e?' · '+esc(it.__e):'')+' · '+esc(it.r)+'</span></a></li>' }).join('')+'</ul>'+
       '<a class="sr-all" href="'+esc(hrefOf(st))+'">View all '+won(res.length)+'<span class="arr" aria-hidden="true">→</span></a></section>';
   });
