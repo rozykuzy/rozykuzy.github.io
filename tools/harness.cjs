@@ -31,4 +31,16 @@ async function ready(p, sel = '#grid .card:not(.sk), #tgrid .card, .sg .card, .a
   await p.waitForTimeout(250);
 }
 async function overflow(p) { return p.evaluate(() => ({ sw: document.documentElement.scrollWidth, w: window.innerWidth })) }
-module.exports = { browser, page, ready, overflow, BASE };
+// one more local server for a test that needs another state of the site, e.g. serve({ BRAND: 'off' }): /BRAND/ answers 404
+function serve(env) {
+  const { spawn } = require('child_process'), net = require('net');
+  return new Promise((res, rej) => {
+    const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const port = s.address().port; s.close(() => {
+      const c = spawn(process.execPath, [path.join(__dirname, 'serve.mjs')], { env: Object.assign({}, process.env, env, { PORT: String(port) }), stdio: ['ignore', 'pipe', 'inherit'] });
+      const t = setTimeout(() => { c.kill(); rej(new Error('server did not start')) }, 8000);
+      c.stdout.on('data', (d) => { if (/serving on/.test(String(d))) { clearTimeout(t); res({ base: 'http://127.0.0.1:' + port, close: () => c.kill() }) } });
+      c.on('error', rej); process.on('exit', () => c.kill());
+    }) });
+  });
+}
+module.exports = { browser, page, ready, overflow, serve, BASE };

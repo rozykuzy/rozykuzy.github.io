@@ -107,6 +107,29 @@ const typeOf = (p, within) => p.evaluate((w) => {
     ok(p.errs.length === 0, 'phone: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
 
+  // ---------------------------------------------------------------- the brands: the same family, scale and tracking
+  { console.log('brands'); const p = await H.page(b, { width: 1440, height: 900 });
+    for (const [name, url, act, within, most] of [['brand room', '/?brand=rick-owens', null, null, 9], ['brands A–Z', '/?view=brands', null, null, 9],
+      ['brands panel', '/?archive=hl', async () => { await p.hover('.arch a[data-nav="brands"]'); await wait(p, 600) }, '#mm-brands', 5],
+      ['brand search', '/', async () => { await p.keyboard.press('/'); await p.keyboard.type('rick'); await wait(p, 600) }, '#search', 8],
+      ['new in brands', '/?view=new', async () => { await p.click('#newT [data-nt="brands"]'); await wait(p, 400) }, null, 9],
+      ['brand detail', '/?brand=guidi', async () => { await p.click('#grid .card:nth-child(2) .ph'); await wait(p, 1000) }, '#dv', 8]]) {
+      await p.mouse.move(700, 890); await p.goto(H.BASE + url); await H.ready(p); await wait(p, 700);
+      if (act) await act();
+      const t = await typeOf(p, within);
+      ok(t.fam.every((f) => f === 'Figtree'), name + ': one family ' + t.fam.join(', '));
+      ok(onScale(t.size) && t.size.length <= most, name + ': sizes on the scale ' + t.size.join(' '));
+      ok(onTrack(t.track), name + ': tracking values from the set (em) ' + t.track.join(' '));
+      console.log('   ' + name + ' type', JSON.stringify(t));
+    }
+    // the front page's brand row: the cards' sizes, and nothing waits to be seen
+    await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 900);
+    const r = await p.evaluate(() => { const n = document.querySelector('#bgrid .bt-n'), s = document.querySelector('#bgrid .bt-s'), t = document.querySelector('#tgrid .card .t');
+      return { n: getComputedStyle(n).fontSize, t: getComputedStyle(t).fontSize, s: getComputedStyle(s).fontSize, shown: [...document.querySelectorAll('#bgrid .bt img')].every((i) => i.classList.contains('on') && +getComputedStyle(i).opacity === 1) } });
+    ok(r.n === r.t && r.s === '11px' && r.shown, 'brand tiles: the card title size, photographs shown ' + JSON.stringify(r));
+    ok((await csp(p)).length === 0 && p.errs.length === 0, 'brands: no CSP or errors ' + JSON.stringify(await csp(p)) + p.errs.join(' | '));
+    await p.context().close(); }
+
   // ---------------------------------------------------------------- reduced motion: nothing moves
   { console.log('reduced motion'); const p = await H.page(b, { width: 1440, height: 900 }, { reduced: true });
     await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 300);

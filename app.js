@@ -1,7 +1,10 @@
-/* Archive Index — one index over two archives.
+/* Archive Index — one index over two archives and the brands.
    The listings come from the two archive pages on this same site (/helmut-lang/ and /ccp/):
    each page carries its day's data in <script id="__data">, and engine.js reads a listing
-   by the same rules that page uses. Nothing here edits a listing. */
+   by the same rules that page uses. The brands come from /BRAND/ on this same site (index.json,
+   b/<slug>.json in the CCP page's own data shape, new.json); each brand is one more archive id
+   ('b:<slug>') read by its own copy of the CCP rules. Until /BRAND/ is published, every brand
+   piece stays out of sight. Nothing here edits a listing. */
 (function(){
 'use strict';
 
@@ -55,6 +58,14 @@ var ARCH={
        ph:'Item · year · number', span:'All seasons', upd:'매일', sub:'전 시즌'}
 };
 var AS=['hl','ccp'];
+// a brand is the archive id 'b:<slug>'; its entry in ARCH (and P, DATA) is made when the brand index arrives (brands with listings)
+var SLUG=/^[a-z0-9][a-z0-9-]{0,79}$/, BRK='brx.saved', BVK='aix.visit.brx';
+function isB(a){ return typeof a==='string' && a.slice(0,2)==='b:' }
+function slugOf(a){ return String(a).slice(2) }
+function roomHref(a){ return isB(a)?'/?brand='+slugOf(a):'/?archive='+a }
+// the reader for an id: a brand's own once it is ready; before that, the CCP page's slugs, bands and photo sizes (the same)
+function prof(a){ return P[a] || (isB(a)?P.ccp:null) }
+function ccpLike(a){ return a==='ccp' || isB(a) }
 
 /* ---------------------------------------------------------------- words on screen
    Menus, filters, buttons and counts are English (set in capitals by the stylesheet); what a listing
@@ -74,11 +85,11 @@ var FLAGEN={'new':'New','drop':'Price drop','multi':'Multi-listed','saved':'Save
 function catEn(c){ return own.call(CATEN,c)?CATEN[c]:c }
 function motifEn(a,m){ return own.call(MOTIFEN,m)?MOTIFEN[m]:P[a].motifLbl(m) }
 function markEn(a,m){ return own.call(MARKEN,m)?MARKEN[m]:(P[a].MARKLBL[m]||m) }
-function grpEn(a,g){ return g==='y'?'Year':g==='cert'?'Year basis':g==='motif'?(a==='ccp'?'Technique · model':'Motif'):g==='src'?'Source':
-  g==='price'?'Price':g==='mark'?(a==='ccp'?'Material · mark':'Origin · line'):g==='flag'?'Status':g }
+function grpEn(a,g){ return g==='y'?'Year':g==='cert'?'Year basis':g==='motif'?(ccpLike(a)?'Technique · model':'Motif'):g==='src'?'Source':
+  g==='price'?'Price':g==='mark'?(ccpLike(a)?'Material · mark':'Origin · line'):g==='flag'?'Status':g }
 // the archive's price bands written as figures: ~30만 → under ₩300K
 function kfig(v){ return v>=1e6?String(v/1e6)+'M':Math.round(v/1e3)+'K' }
-function priceEn(a,b){ var r=null; P[a].PRICE.forEach(function(x){ if(x[0]===b) r=x }); if(!r) return b;
+function priceEn(a,b){ var r=null; prof(a).PRICE.forEach(function(x){ if(x[0]===b) r=x }); if(!r) return b;
   if(!(r[1]>0)) return 'Under ₩'+kfig(r[2]);
   if(!(r[2]<Infinity)) return '₩'+kfig(r[1])+' and up';
   return '₩'+kfig(r[1])+'–'+kfig(r[2]) }
@@ -96,16 +107,132 @@ function extract(t){
   if(s<1||e<0) throw new Error('nodata');
   return JSON.parse(t.slice(s,e));
 }
+function getJSON(u){ return fetch(u,{credentials:'same-origin'}).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json() }) }
+// an archive's data is in its page; a brand's is a file of its own, read by the brands' copy of the CCP rules
+function source(a){
+  if(isB(a)) return Promise.all([getJSON(ARCH[a].path), bengine()]).then(function(r){ bprof(a); return r[0] });
+  return fetch(ARCH[a].path,{credentials:'same-origin'})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text() }).then(extract);
+}
 function load(a){
   if(DATA[a]) return Promise.resolve(DATA[a]);
   if(PEND[a]) return PEND[a];
+  if(!own.call(ARCH,a)) return Promise.reject(new Error('unknown'));
   busy(1);
-  PEND[a]=fetch(ARCH[a].path,{credentials:'same-origin'})
-    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text() })
-    .then(function(t){ var d=extract(t); if(!d || !Array.isArray(d.items)) throw new Error('shape'); ready(a,d); return d })
+  PEND[a]=source(a)
+    .then(function(d){ if(!d || !Array.isArray(d.items)) throw new Error('shape'); ready(a,d); return d })
     .then(function(d){ busy(-1); delete FAIL[a]; PEND[a]=null; if(ST.item && !DV.it) setTimeout(syncItem,0); return d },
           function(e){ busy(-1); FAIL[a]=e; PEND[a]=null; if(ST.item && !DV.it) setTimeout(syncItem,0); throw e });
   return PEND[a];
+}
+
+/* ---------------------------------------------------------------- brands: the index, their reader, today's new ones
+   BIDX: null = not asked yet, false = none (not published, or unreadable), else the index. Brands without listings
+   are in it with c = 0; a brand that has an archive here (ex) is that archive. */
+var BIDX=null, BIDXP=null, BENTRY={}, BLIST=[], BBASE={today:null, rates:{}, counts:{}};
+function num(v){ v=+v; return isFinite(v) && v>0 ? Math.floor(v) : 0 }
+function bidx(){
+  if(BIDX!==null) return Promise.resolve(BIDX);
+  if(BIDXP) return BIDXP;
+  busy(1);
+  BIDXP=getJSON('/BRAND/index.json').then(bindex).catch(function(){ return false })
+    .then(function(x){ busy(-1); BIDX=x||false; BIDXP=null; brandPanel(); drawerMeta(); return BIDX });
+  return BIDXP;
+}
+function bindex(x){
+  if(!x || !Array.isArray(x.brands)) return false;
+  var list=[];
+  x.brands.forEach(function(e){
+    if(!e || typeof e!=='object') return;
+    var s=String(e.s||'').toLowerCase(); if(!SLUG.test(s) || own.call(BENTRY,s)) return;
+    var q=e.q && typeof e.q==='object' ? e.q : {}, str=function(v){ return typeof v==='string' && v.trim() ? v.trim().slice(0,80) : null };
+    var b={s:s, n:(str(e.n)||s), c:num(e.c), nw:num(e.nw), so:num(e.so), big:!!e.big,
+      ph:(Array.isArray(e.ph)?e.ph:[]).map(okUrl).filter(Boolean).slice(0,2), q:{en:str(q.en), ja:str(q.ja), ko:str(q.ko)},
+      ex:(typeof e.ex==='string' && AS.indexOf(e.ex)>=0)?e.ex:null};
+    BENTRY[s]=b; list.push(b);
+    // a room for each brand with listings; one with none is a name in the list (its address opens the list)
+    if(b.ex || !b.c) return;
+    var a='b:'+s;
+    ARCH[a]={a:a, slug:s, brand:true, name:b.n, short:b.n, path:'/BRAND/b/'+s+'.json', sk:BRK, ph:'Item · year · size',
+      span:b.big?'Dated listings':'All seasons', upd:'매일', sub:'', e:b};
+    SRCSEEN[a]={}; MCOUNT[a]={};
+  });
+  BLIST=list;
+  BBASE={today:typeof x.today==='string'?x.today:null, rates:x.rates && typeof x.rates==='object' ? x.rates : {}, counts:{}};
+  return {built:x.built, today:BBASE.today, brands:list};
+}
+// a brand seen for the first time today has every listing new; like an archive's first day, none of it counts as new
+function firstDay(b){ return !!(b && b.c>0 && b.nw>=b.c) }
+function brandsIn(){ return BLIST.filter(function(b){ return !b.ex }) }
+
+// The brands' reader: a second copy of the CCP rules (engine.js run once more), so a brand's day, rates and query
+// never touch the CCP room's own. CCP's motifs are emptied from this copy; each brand puts its own names in
+// where the CCP rules say Carol Christian Poell (search noise, the "find elsewhere" queries).
+var BENG=null, BENGP=null, BCUR=null;
+function bengine(){
+  if(BENG) return Promise.resolve(BENG);
+  if(BENGP) return BENGP;
+  BENGP=new Promise(function(res,rej){
+    var cur=doc.querySelector('script[src*="engine.js"]'), s=doc.createElement('script');
+    s.src=cur?cur.getAttribute('src'):'/engine.js'; s.async=true;
+    s.onload=function(){ var w=window.AIX, c=w && w.profiles && w.profiles.ccp; if(w) w.profiles=P; s.remove();
+      if(c && c!==P.ccp && Array.isArray(c.MOTIF)) res(c); else rej(new Error('engine')) };
+    s.onerror=function(){ s.remove(); rej(new Error('engine')) };
+    doc.head.appendChild(s);
+  }).then(function(c){ c.MOTIF.length=0; BENG=c; BENGP=null; return c }, function(e){ BENGP=null; throw e });
+  return BENGP;
+}
+function fold(s){ s=String(s||''); try{ s=s.normalize('NFKD') }catch(e){} return s.replace(/[\u0300-\u036f]/g,'') }
+function bprof(a){
+  if(P[a]) return P[a];
+  var A=ARCH[a], b=A.e, base=BENG, me=Object.create(base), q=b.q;
+  // the brand's own names are not search terms in its own room, as Carol Christian Poell is not in the CCP room
+  var noise=[];
+  [A.name, q.en, q.ja, q.ko].forEach(function(t){ if(!t) return;
+    [base.nrm(t), base.nrm(fold(t))].forEach(function(n){
+      var ws=n.split(/[\s\-_./*:&+]+/).filter(Boolean);
+      n.split(' ').concat(ws,[ws.join(''), n.replace(/\s+/g,'')]).forEach(function(w){ if(w && noise.indexOf(w)<0) noise.push(w) }) }) });
+  var sb={en:q.en||base.nrm(A.name), ja:q.ja||q.en||base.nrm(A.name), ko:q.ko||q.en||base.nrm(A.name)};
+  var use=function(){ if(BCUR!==a){ base.setData(me.__d||BBASE); BCUR=a } };
+  me.tag=a; me.hasCodes=false; me.codeNum=null; me.__d=null; me.SEEKBRAND=sb;
+  me.setData=function(d){ me.__d=d; base.setData(d); BCUR=a };
+  me.setQuery=function(t){ var bn=base.BRANDNOISE; bn.length=0; Array.prototype.push.apply(bn,noise); base.setQuery(t) };
+  me.seekQuery=function(parts,L){ var s=base.SEEKBRAND; s.en=sb.en; s.ja=sb.ja; s.ko=sb.ko; return base.seekQuery(parts,L) };
+  ['seenText','seenDays','dutyHtml','usdOf','flagsHtml'].forEach(function(f){ var fn=base[f]; me[f]=function(it){ use(); return fn(it) } });
+  P[a]=me; return me;
+}
+// today's new listings across the brands (new.json): BNEW null = not asked yet, false = none
+var BNEW=null, BNEWP=null;
+function bnew(){
+  if(BNEW!==null) return Promise.resolve(BNEW);
+  if(BNEWP) return BNEWP;
+  BNEWP=bidx().then(function(x){ if(!x || !brandsIn().length) return false;
+      busy(1);
+      return Promise.all([getJSON('/BRAND/new.json'), bengine()]).then(function(r){ return bnewReady(r[0]) })
+        .then(function(v){ busy(-1); return v },function(){ busy(-1); return false }) })
+    .catch(function(){ return false })
+    .then(function(v){ BNEW=v||false; BNEWP=null; drawerMeta(); if(ST.item && !DV.it) setTimeout(syncItem,0); return BNEW });
+  return BNEWP;
+}
+function bnewReady(x){
+  if(!x || !Array.isArray(x.items)) return false;
+  if(typeof x.today==='string' && !BBASE.today) BBASE.today=x.today;
+  var items=[], byKey={};
+  x.items.forEach(function(it,i){
+    if(!it || typeof it!=='object' || typeof it.b!=='string') return;
+    var a='b:'+it.b.toLowerCase(); if(!own.call(ARCH,a) || firstDay(ARCH[a].e)) return;
+    it.__a=a; it.__i=i; bprof(a).prep(it); it.__k=fnv(it.l||('#'+i)); it.__nw=1;
+    var m=byKey[a]||(byKey[a]={}); if(!own.call(m,it.__k)) m[it.__k]=it;
+    items.push(it);
+  });
+  return {today:x.today||BBASE.today, items:items, byKey:byKey};
+}
+// a listing by its archive and key: the copy on screen — in New in today's new ones (new.json), elsewhere the
+// archive's or brand's own data
+function itemAt(a,k){
+  var d=DATA[a], m=BNEW && own.call(BNEW.byKey,a) ? BNEW.byKey[a] : null;
+  var x=d && own.call(d.__byKey,k) ? d.__byKey[k] : null, y=m && own.call(m,k) ? m[k] : null;
+  return ST.view==='new' ? (y||x) : (x||y);
 }
 function ready(a,d){
   var p=P[a]; p.setData(d);
@@ -132,6 +259,7 @@ function ready(a,d){
   d.__allnew=!!(d.counts && d.counts.items && d.counts.fresh>=d.counts.items);
   d.__fresh=d.__allnew?0:fresh;
   MCOUNT[a]=mc;
+  if(!SRCSEEN[a]) SRCSEEN[a]={};
   (d.sources||[]).forEach(function(s){ if(s && s.name && s.seen) SRCSEEN[a][s.name]=s.seen });
   // option order is fixed once from the whole archive, so choices do not jump while counts move
   var cats=p.CATORDER.filter(function(c){ return vals.cat[c] });
@@ -147,31 +275,46 @@ function ready(a,d){
 }
 var VISITED={};
 function seen(a){ if(VISITED[a] || !DATA[a]) return; VISITED[a]=1; visit(a,DATA[a]) }
+// the brands keep their visit days in one map (aix.visit.brx: slug → {date, prev}), the archives one key each
+function objOf(v){ return v && typeof v==='object' && !Array.isArray(v) ? v : null }
+function visitGet(a){
+  if(!isB(a)) return objOf(lsJSON(ARCH[a].vk));
+  var m=objOf(lsJSON(BVK)), s=slugOf(a); return m && own.call(m,s) ? objOf(m[s]) : null;
+}
+function visitSet(a,v){
+  if(!isB(a)) return lsSet(ARCH[a].vk, JSON.stringify(v));
+  var m=objOf(lsJSON(BVK))||{}; m[slugOf(a)]=v; return lsSet(BVK, JSON.stringify(m));
+}
 // "since your last visit" — the day before this one on which the archive was opened here
 function visit(a,d){
   var today=d.today; if(!today) return;
-  var st=lsJSON(ARCH[a].vk);
+  var st=visitGet(a);
   if(st && st.date && st.date>today) return;
   var prev=null;
   if(st && st.date===today) prev=st.prev||null;
   else if(st && st.date && st.date<today) prev=st.date;
-  lsSet(ARCH[a].vk, JSON.stringify({date:today, prev:prev}));
+  visitSet(a, {date:today, prev:prev});
   var gap=prev?P[a].daysBetween(prev,today):null;
   SINCE[a]=(gap!=null && gap>=2)?prev:null;
   P[a].setSince(SINCE[a]);
 }
 
-/* ---------------------------------------------------------------- saved (shared with both archive pages) */
-var SAVED={};
-function readSaved(a){ var v=lsJSON(ARCH[a].sk); return v && typeof v==='object' && !Array.isArray(v) ? v : {} }
-function reloadSaved(){ AS.forEach(function(a){ SAVED[a]=readSaved(a) }) }
+/* ---------------------------------------------------------------- saved (shared with both archive pages)
+   Three stores: hlx.saved and ccpx.saved by listing address, as the two archive pages keep them, and brx.saved
+   for every brand by '<slug>|<item key>' — the same value {k,p,u,d,g} in all three. */
+var SAVED={}, STORES={hl:'hlx.saved', ccp:'ccpx.saved', brx:BRK};
+function storeOf(a){ return isB(a)?'brx':a }
+function readSaved(a){ var s=storeOf(a), v=own.call(STORES,s)?lsJSON(STORES[s]):null; return v && typeof v==='object' && !Array.isArray(v) ? v : {} }
+function reloadSaved(){ ['hl','ccp','brx'].forEach(function(s){ SAVED[s]=readSaved(s) }) }
 reloadSaved();
 function curOf(u){ return u && u!=='KRW' ? String(u) : '' }
-function isSaved(it){ var m=SAVED[it.__a]; return !!(m && own.call(m,it.l) && m[it.l]) }
-function keepMark(it){ var d=DATA[it.__a]; return {k:it.k||0, p:it.p||0, u:curOf(it.u), d:(d&&d.today)||'', g:it.x?1:0} }
-function savedN(){ return keys(SAVED.hl||{}).length+keys(SAVED.ccp||{}).length }
+function skey(it){ return isB(it.__a) ? slugOf(it.__a)+'|'+it.__k : it.l }
+function isSaved(it){ var m=SAVED[storeOf(it.__a)], k=skey(it); return !!(m && own.call(m,k) && m[k]) }
+function todayOf(a){ var d=DATA[a]; return (d&&d.today) || (isB(a) ? (BNEW&&BNEW.today)||BBASE.today : '') || '' }
+function keepMark(it){ return {k:it.k||0, p:it.p||0, u:curOf(it.u), d:todayOf(it.__a), g:it.x?1:0} }
+function savedN(){ return keys(SAVED.hl||{}).length+keys(SAVED.ccp||{}).length+keys(SAVED.brx||{}).length }
 function savedChange(it){
-  var b=(SAVED[it.__a]||{})[it.l]; if(!b || typeof b!=='object') return null;
+  var m=SAVED[storeOf(it.__a)]||{}, k=skey(it), b=own.call(m,k)?m[k]:null; if(!b || typeof b!=='object') return null;
   if(it.x) return b.g?null:{gone:true};
   var cu=curOf(it.u); if(curOf(b.u)!==cu) return null;
   var was=cu?b.p:b.k, cur=cu?it.p:it.k;
@@ -181,16 +324,16 @@ function savedChange(it){
 // opening a saved listing makes its current price the new baseline, as the archive pages do
 function ackSaved(it){
   if(!isSaved(it)) return;
-  var m=readSaved(it.__a), b=m[it.l], k=keepMark(it); if(!b) return;
+  var s=storeOf(it.__a), sk=skey(it), m=readSaved(s), b=m[sk], k=keepMark(it); if(!b) return;
   if(typeof b==='object' && b.k===k.k && b.p===k.p && curOf(b.u)===k.u && !!b.g===!!k.g) return;
-  m[it.l]=k; if(lsSet(ARCH[it.__a].sk,JSON.stringify(m))) SAVED[it.__a]=m;
+  m[sk]=k; if(lsSet(STORES[s],JSON.stringify(m))) SAVED[s]=m;
 }
 function toggleSave(it){
-  var a=it.__a, m=readSaved(a);
-  if(m[it.l]) delete m[it.l]; else m[it.l]=keepMark(it);
-  if(!lsSet(ARCH[a].sk,JSON.stringify(m))){ toast('This browser cannot save'); return }
-  SAVED[a]=m; savedUi(); marks(it);
-  toast(m[it.l]?'Saved':'Removed');
+  var s=storeOf(it.__a), sk=skey(it), m=readSaved(s);
+  if(own.call(m,sk) && m[sk]) delete m[sk]; else m[sk]=keepMark(it);
+  if(!lsSet(STORES[s],JSON.stringify(m))){ toast('This browser cannot save'); return }
+  SAVED[s]=m; savedUi(); marks(it);
+  toast(m[sk]?'Saved':'Removed');
   if(ST.view==='saved' || (ST.view==='room' && ST.F.flag.saved)){ LASTQ=null; update() }
 }
 function marks(it){
@@ -210,7 +353,7 @@ function savedUi(){
   var dm=$('dmSaved'); if(dm) dm.textContent=n?won(n):'';
 }
 window.addEventListener('storage',function(e){
-  if(e.key===ARCH.hl.sk || e.key===ARCH.ccp.sk || e.key===null){
+  if(e.key===ARCH.hl.sk || e.key===ARCH.ccp.sk || e.key===BRK || e.key===null){
     reloadSaved(); savedUi();
     var bs=doc.querySelectorAll('[data-save]');
     for(var i=0;i<bs.length;i++){ var it=itemOfEl(bs[i]); if(it){ var on=isSaved(it); bs[i].classList.toggle('on',on); bs[i].setAttribute('aria-pressed',String(on));
@@ -258,11 +401,12 @@ function pack(ys){
 }
 function readUrl(search){
   var q=params(search), s={view:'home', a:null, F:blankF(), sort:'new', item:null};
-  var a=formVal(q.archive).trim().toLowerCase(), v=formVal(q.view).trim().toLowerCase();
+  var a=formVal(q.archive).trim().toLowerCase(), v=formVal(q.view).trim().toLowerCase(), br=formVal(q.brand).trim().toLowerCase();
   if(a==='hl' || a==='ccp'){ s.view='room'; s.a=a }
+  else if(SLUG.test(br)){ s.view='room'; s.a='b:'+br }
   if(v==='saved' || v==='about' || v==='new' || v==='brands'){ s.view=v; s.a=null }
   if(s.view==='room'){
-    var p=P[s.a], F=s.F;
+    var p=prof(s.a), F=s.F;
     listOf(q.category).forEach(function(x){ F.cat[unslug(p.CATSLUG,x)]=1 });
     unpack(listOf(q.year)).forEach(function(x){ F.y[x]=1 });
     listOf(q.motif).forEach(function(x){ F.motif[x.toLowerCase()]=1 });
@@ -299,10 +443,10 @@ function qsOf(st, origin){
   var p=[], enc=function(a){ return a.map(function(x){ return encodeURIComponent(x) }).join(',') };
   if(!origin){
     if(st.view==='saved' || st.view==='about' || st.view==='new' || st.view==='brands') p.push('view='+st.view);
-    if(st.view==='room') p.push('archive='+st.a);
+    if(st.view==='room') p.push(isB(st.a)?'brand='+slugOf(st.a):'archive='+st.a);
   }
   if(st.view==='room'){
-    var pr=P[st.a], F=st.F;
+    var pr=prof(st.a), F=st.F;
     var c=keys(F.cat).map(function(k){ return pr.CATSLUG[k]||k }); if(c.length) p.push('category='+enc(c));
     var y=pack(keys(F.y)); if(y.length) p.push('year='+enc(y));
     var mo=keys(F.motif); if(mo.length) p.push('motif='+enc(mo));
@@ -333,6 +477,22 @@ function keepPlace(){ try{ var s=history.state && typeof history.state==='object
   o.aix=1; o.y=Math.round(window.scrollY); o.n=SHOWN; history.replaceState(o,'') }catch(e){} }
 function go(st, push, after){ var prev=ST; if(push!==false) keepPlace(); ST=st; tidy(ST); if(push!==false) writeUrl(true); route(prev, after) }
 function route(prev, after, place){
+  // a brand room is known once the brand index is here: a brand with an archive of its own opens that archive,
+  // a name the index does not have opens the list of brands
+  if(ST.view==='room' && isB(ST.a) && !own.call(ARCH,ST.a)){
+    var want=ST;
+    bidx().then(function(){
+      if(ST!==want) return;
+      if(!own.call(ARCH,ST.a)){
+        var s=slugOf(ST.a), e=own.call(BENTRY,s)?BENTRY[s]:null;
+        if(e && e.ex){ ST={view:'room', a:e.ex, F:ST.F, sort:ST.sort, item:ST.item}; tidy(ST) }
+        else ST={view:'brands', a:null, F:blankF(), sort:'new', item:null};
+        writeUrl(false);
+      }
+      route(prev, after, place);
+    });
+    return;
+  }
   var key=ST.view+':'+(ST.a||'');
   if(prev && key===MOUNTED){
     if(filterKey()!==LASTQ) update();
@@ -360,6 +520,7 @@ function roomOf(){ return ST.view==='room' ? ST.a : 'home' }
 function setRoom(r){ root.setAttribute('data-room',r) }
 function title(){
   var t='Archive Index';
+  if(ST.view==='room' && !own.call(ARCH,ST.a)) return;
   if(ST.view==='room') t=ARCH[ST.a].name+' — '+t;
   else if(ST.view==='saved') t='Saved — '+t;
   else if(ST.view==='about') t='About — '+t;
@@ -369,13 +530,14 @@ function title(){
   if(DV.it) t=clip(DV.it.t,60)+' — '+ARCH[DV.it.__a].name;
   doc.title=t;
   // one canonical address per view (filters and the open listing are not separate pages)
-  var c=doc.querySelector('link[rel="canonical"]'), q=ST.view==='room'?'?archive='+ST.a:ST.view!=='home'?'?view='+ST.view:'';
+  var c=doc.querySelector('link[rel="canonical"]'), q=ST.view==='room'?roomHref(ST.a).slice(1):ST.view!=='home'?'?view='+ST.view:'';
   if(c) c.setAttribute('href','https://rozykuzy.github.io/'+q);
   var md0=doc.querySelector('meta[name="description"]'), d=ST.view==='room'?DATA[ST.a]:null;
-  if(md0 && ST.view==='room') md0.setAttribute('content',ARCH[ST.a].name+' '+ARCH[ST.a].span+' 중고 매물'+(d?' '+won(d.__cards)+'건':'')+' · 매일 갱신 · 판매자 통화와 원화 환산가');
+  if(md0 && ST.view==='room') md0.setAttribute('content',ARCH[ST.a].name+(isB(ST.a)?'':' '+ARCH[ST.a].span)+' 중고 매물'+(d?' '+won(d.__cards)+'건':'')+' · 매일 갱신 · 판매자 통화와 원화 환산가');
 }
 function navUi(){
-  var cur=ST.view==='room'?ST.a:ST.view;
+  // a brand room sits under Brands
+  var cur=ST.view==='room'?(isB(ST.a)?'brands':ST.a):ST.view;
   var ls=doc.querySelectorAll('[data-nav]');
   for(var i=0;i<ls.length;i++){ var on=ls[i].getAttribute('data-nav')===cur;
     if(on) ls[i].setAttribute('aria-current','page'); else ls[i].removeAttribute('aria-current') }
@@ -408,7 +570,7 @@ function update(){
 function refresh(){ LASTQ=null; update() }
 
 /* ---------------------------------------------------------------- pieces */
-function thumb(a,u,w){ try{ return P[a].thumb(u,w) }catch(e){ return u } }
+function thumb(a,u,w){ try{ return prof(a).thumb(u,w) }catch(e){ return u } }
 function imgTag(a,u,w,o){
   o=o||{}; u=okUrl(u); if(!u) return '';
   var t=okUrl(thumb(a,u,w))||u;
@@ -434,12 +596,12 @@ function money(v,u){ var sym=u?((P.hl.SYM[u])||u+' '):'₩'; return sym+Number(v
 function itemOfEl(el){
   var c=el.closest('[data-a]'); if(!c) return null;
   var a=c.getAttribute('data-a'), k=el.getAttribute('data-save')||el.getAttribute('data-open')||c.getAttribute('data-k');
-  var d=DATA[a]; return d && k && own.call(d.__byKey,k) ? d.__byKey[k] : null;
+  return a && k ? itemAt(a,k) : null;
 }
 function subLine(it){
   var p=P[it.__a], auc=p.aucText(it), seen=p.seenText(it);
   return [ it.z?esc(it.z):'',
-    it.mc?'<span class="mc">'+esc(it.mc)+'</span>':'',
+    it.mc && !isB(it.__a)?'<span class="mc">'+esc(it.mc)+'</span>':'',
     esc(it.r),
     it.g>1?'같은 상품명 '+won(it.g)+'곳':'',
     auc?'<span class="auc">'+esc(auc)+'</span>':'',
@@ -455,7 +617,7 @@ function yearPart(it){
 function statusFl(it){
   var d=DATA[it.__a], o=[];
   if(it.so) o.push('<span class="sold">Sold record</span>');
-  if(it.n && !(d && d.__allnew)) o.push('<span class="nw">New</span>');
+  if((it.n || it.__nw) && !(d && d.__allnew)) o.push('<span class="nw">New</span>');
   if(it.w && it.w>it.k) o.push('<span class="dr">Price drop</span>');
   if(it.x) o.push('<span>Delisted</span>');
   return o.join('');
@@ -473,7 +635,7 @@ function card(it,o){
     '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="Save · '+esc(clip(it.t,40))+'"><i>'+HEART+'</i></button>'+
     '<div class="cap">'+
       '<div class="vd">'+(o.tag?'<span class="at">'+esc(A.name)+'</span>':'')+yearPart(it)+'</div>'+
-      '<h3 class="t"'+tl(it)+'><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
+      '<h3 class="t"'+tl(it)+'><a href="'+roomHref(a)+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
       p.priceHtml(it,false)+
       (st?'<div class="fl">'+st+'</div>':'')+
       (ch?'<div class="chg">'+(ch.gone?'Delisted since saved':'Lower since saved '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
@@ -489,11 +651,11 @@ function row(it,i,o){
   return '<article class="row'+(it.x?' gone':'')+'" data-a="'+a+'" data-k="'+k+'">'+
     '<span class="r-no">'+String(i+1).padStart(3,'0')+'</span>'+
     '<span class="ph r-ph" data-open="'+k+'">'+imgTag(a,ph,160)+'</span>'+
-    '<h3 class="r-t"'+tl(it)+'><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
+    '<h3 class="r-t"'+tl(it)+'><a href="'+roomHref(a)+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
     '<span class="r-m">'+
       '<span class="r-y'+(y?'':' s')+'">'+(y?esc(y):'연도 미상')+'</span>'+
       (it.z?'<span class="r-z">'+esc(it.z)+'</span>':'')+
-      '<span class="r-s">'+(o.tag?esc(ARCH[a].short==='CCP'?'CCP':'HL')+' · ':'')+esc(it.r)+'</span>'+
+      '<span class="r-s">'+(o.tag?esc(isB(a)?ARCH[a].short:ARCH[a].short==='CCP'?'CCP':'HL')+' · ':'')+esc(it.r)+'</span>'+
       pr+
     '</span>'+
     pr+
@@ -521,6 +683,11 @@ function homeShell(){
       '</span>'+
     '</a>' }).join('')+
   '</nav>'+
+  '<section class="sec bros" id="bros" aria-labelledby="brosH" hidden>'+
+    '<div class="sec-h"><h2 id="brosH">Brands</h2></div>'+
+    '<div class="bgrid" id="bgrid"></div>'+
+    '<div class="sec-more"><a class="btn" href="/?view=brands">All brands</a></div>'+
+  '</section>'+
   '<section class="sec today" id="today" aria-labelledby="todayH">'+
     '<div class="sec-h"><h2 id="todayH">New today</h2><span class="sec-d" id="todayD"></span></div>'+
     '<div class="tabs" id="todayT" role="group" aria-label="New today, by archive"></div>'+
@@ -557,7 +724,29 @@ function statHtml(a,d){
   if(d.built) s.push(['Updated',esc(shortTime(d.built))]);
   return s.map(function(x){ return '<span><em>'+x[0]+'</em><b>'+x[1]+'</b></span>' }).join('');
 }
+// the brands with the most new listings today (a brand's first day does not count), then the largest, four at most
+function cmpName(x,y){ return x.n.localeCompare(y.n,'en',{sensitivity:'base'}) }
+function broPick(){
+  var L=brandsIn().filter(function(b){ return b.c>0 });
+  var out=L.filter(function(b){ return b.nw>0 && !firstDay(b) }).sort(function(x,y){ return y.nw-x.nw || y.c-x.c || cmpName(x,y) }).slice(0,4);
+  L.slice().sort(function(x,y){ return y.c-x.c || cmpName(x,y) }).forEach(function(b){ if(out.length<4 && out.indexOf(b)<0) out.push(b) });
+  return out;
+}
+function broUpdate(gen){
+  bidx().then(function(x){
+    var box=$('bros'), g=$('bgrid'); if(gen!==GEN || !box || !g) return;
+    var L=x?broPick():[];
+    if(!L.length){ box.hidden=true; return }
+    g.innerHTML=L.map(function(b){ var fresh=b.nw>0 && !firstDay(b);
+      return '<a class="bt" href="/?brand='+b.s+(fresh?'&amp;show=new':'')+'">'+
+        '<span class="ph'+(b.ph[0]?'':' dead')+'">'+imgTag('b:'+b.s,b.ph.filter(bigOk)[0]||b.ph[0],600)+'</span>'+
+        '<span class="bt-n">'+esc(b.n)+'</span>'+
+        '<span class="bt-s">'+(fresh?'<em>New</em><b>'+won(b.nw)+'</b>':'<em>Items</em><b>'+won(b.c)+'</b>')+'</span></a>' }).join('');
+    bindImgs(g); box.hidden=false;
+  });
+}
 function homeUpdate(gen){
+  broUpdate(gen);
   AS.forEach(function(a){
     var paint=function(){ if(gen!==GEN) return; var d=DATA[a]; seen(a);
       var st=$('st-'+a); if(st) st.innerHTML=statHtml(a,d);
@@ -634,10 +823,18 @@ function megaMenus(){
       '<div class="mm-c"><p class="mm-h">Browse</p><ul class="mm-l">'+ways+'</ul></div>'+
       '<div class="mm-c mm-e"><a class="mm-all" href="/?archive='+a+'">All '+esc(A.name)+'<span class="n" data-mmw="'+a+'|all"></span></a></div></div>';
   });
-  var b=$('mm-brands');
-  if(b && !b.__done){ b.__done=1;
-    b.innerHTML='<div class="mm-in"><div class="mm-c"><p class="mm-h">A–Z</p><ul class="mm-l">'+brandList().map(function(x){ return '<li><a href="'+x.href+'">'+esc(x.name)+'<span class="n" data-mmw="'+x.a+'|all"></span></a></li>' }).join('')+'</ul></div>'+
-      '<div class="mm-c mm-e"><a class="mm-all" href="/?view=brands">All brands</a></div></div>' }
+  brandPanel();
+}
+// under Brands: the two archives, and once the brand index is here every brand A–Z in compact columns
+function brandPanel(){
+  var b=$('mm-brands'); if(!b) return;
+  var L=brandList(), all=L.length>AS.length;
+  if(b.__n===L.length) return; b.__n=L.length;
+  b.innerHTML='<div class="mm-in"><div class="mm-c'+(all?' mm-az':'')+'"><p class="mm-h">A–Z</p><ul class="mm-l'+(all?' az':'')+'">'+L.map(function(x){
+      if(!x.href) return '<li><span class="mm-x">'+esc(x.name)+'</span></li>';
+      return '<li><a href="'+x.href+'">'+esc(x.name)+(isB(x.a)?'<span class="n">'+won(x.n)+'</span>':'<span class="n" data-mmw="'+x.a+'|all"></span>')+'</a></li>' }).join('')+'</ul></div>'+
+    '<div class="mm-c mm-e"><a class="mm-all" href="/?view=brands">All brands</a></div></div>';
+  AS.forEach(function(a){ var d=DATA[a], n=b.querySelector('[data-mmw="'+a+'|all"]'); if(d && n) n.textContent=d.__cards?won(d.__cards):'' });
 }
 function megaCounts(a){
   var d=DATA[a]; if(!d || d.__mm) return; d.__mm=1;
@@ -652,7 +849,13 @@ function drawerMeta(){
   var dm={hl:$('dmHl'), ccp:$('dmCcp')};
   AS.forEach(function(a){ if(DATA[a]) megaCounts(a) });
   AS.forEach(function(a){ if(dm[a] && DATA[a]) dm[a].textContent=won(DATA[a].__cards) });
-  var nw=$('dmNew'); if(nw && AS.every(function(a){ return DATA[a] })){ var n=0; AS.forEach(function(a){ n+=DATA[a].__fresh||0 }); nw.textContent=n?won(n):'' }
+  var nw=$('dmNew'); if(nw && AS.every(function(a){ return DATA[a] })){ var n=bnewN(); AS.forEach(function(a){ n+=DATA[a].__fresh||0 }); nw.textContent=n?won(n):'' }
+}
+// the brands' new listings in New in: new.json once read, before that what the index says (new.json holds 400 at most)
+function bnewN(){
+  if(BNEW) return BNEW.items.filter(function(it){ return !it.x && !it.so && !it.__bad }).length;
+  if(!BIDX) return 0;
+  var n=0; brandsIn().forEach(function(b){ if(!firstDay(b)) n+=b.nw }); return Math.min(n,400);
 }
 
 /* ---------------------------------------------------------------- new in: what came in today, in both archives */
@@ -669,16 +872,20 @@ function newShell(){
 function newUpdate(gen){
   var pending=AS.filter(function(a){ return !DATA[a] && !FAIL[a] });
   pending.forEach(function(a){ load(a).then(function(){ if(gen===GEN) newUpdate(gen) },function(){ if(gen===GEN) newUpdate(gen) }) });
-  if(pending.length) return;
+  var waitB=BNEW===null;
+  if(waitB) bnew().then(function(){ if(gen===GEN) newUpdate(gen) });
+  if(pending.length || waitB) return;
   AS.forEach(seen);
-  var per={}, total=0;
+  // the two archives, and a third tab for the brands' new listings when the brand index has them
+  var per={}, total=0, tabs=AS.slice();
   AS.forEach(function(a){ per[a]=newOf(a); total+=per[a].length });
+  if(BNEW){ tabs.push('brands'); per.brands=BNEW.items.filter(function(it){ return !it.x && !it.so && !it.__bad }).sort(cmpNew); total+=per.brands.length }
   if(NEWTAB!=='all' && !(per[NEWTAB]||[]).length) NEWTAB='all';
-  NEWLIST=NEWTAB==='all' ? AS.reduce(function(o,a){ return o.concat(per[a]) },[]).sort(cmpNew) : per[NEWTAB].slice();
+  NEWLIST=NEWTAB==='all' ? tabs.reduce(function(o,a){ return o.concat(per[a]) },[]).sort(cmpNew) : per[NEWTAB].slice();
   var d0=DATA.hl||DATA.ccp;
   $('nwm').innerHTML=(d0?'<span>'+esc(enDay(d0.today))+'</span>':'')+'<span><b>'+won(total)+'</b> Items</span>'+
     AS.filter(function(a){ return FAIL[a] }).map(function(a){ return '<span class="bad">'+esc(ARCH[a].name)+' · Could not load</span>' }).join('');
-  $('newT').innerHTML=[['all','All',total]].concat(AS.map(function(a){ return [a,ARCH[a].name,per[a].length] })).map(function(t){
+  $('newT').innerHTML=[['all','All',total]].concat(tabs.map(function(a){ return [a,a==='brands'?'Brands':ARCH[a].name,per[a].length] })).map(function(t){
     return '<button type="button" class="tab" data-nt="'+t[0]+'" aria-pressed="'+(t[0]===NEWTAB)+'"'+(t[2]||t[0]==='all'?'':' disabled')+'>'+esc(t[1])+'<sup>'+won(t[2])+'</sup></button>' }).join('');
   newPaint(true);
 }
@@ -696,23 +903,40 @@ function newPaint(reset){
 }
 
 /* ---------------------------------------------------------------- brands, A to Z */
-// the archives this site reads; a brand joins the list when an index of its own is published here
-function brandList(){ return AS.map(function(a){ return {name:ARCH[a].name, href:'/?archive='+a, a:a} }) }
+// the archives this site reads and, once /BRAND/ is published, every brand of its index (one with an archive here is
+// that archive); a brand without listings is a name without a link. x.al: other spellings, for the search
+function brandList(){
+  var L=AS.map(function(a){ return {name:ARCH[a].name, href:'/?archive='+a, a:a, n:DATA[a]?DATA[a].__cards:0, al:P[a].BRANDNOISE||[]} });
+  if(!BIDX) return L;
+  brandsIn().forEach(function(b){ L.push({name:b.n, href:b.c?'/?brand='+b.s:null, a:'b:'+b.s, n:b.c, al:[b.q.en,b.q.ja,b.q.ko].filter(Boolean), ph:b.ph.filter(bigOk)[0]||b.ph[0]}) });
+  return L.sort(function(x,y){ return cmpName({n:x.name},{n:y.name}) });
+}
+// names under their first letter; names that start with a figure under #
+function letterOf(n){ var c=fold(n).charAt(0).toUpperCase(); return /[A-Z]/.test(c)?c:'#' }
+// (the list waits for the brand index, so it is drawn once: two names, or all of them)
 function brandsShell(){
-  var L=brandList().slice().sort(function(x,y){ return x.name.localeCompare(y.name,'en') }), by={};
-  L.forEach(function(b){ var c=b.name.charAt(0).toUpperCase(); (by[c]=by[c]||[]).push(b) });
-  var letters=keys(by).sort();
   return '<section class="rh az-h"><span class="rh-ph two" id="azph" aria-hidden="true"></span>'+
-      '<div class="rh-in"><h1 class="rt" id="vh" tabindex="-1">Brands</h1><p class="rm"><span class="st"><b>'+won(L.length)+'</b> <em>Brands</em></span></p></div></section>'+
-    '<nav class="az-l" aria-label="A to Z">'+letters.map(function(c){ return '<a href="#az-'+c+'" data-az="'+c+'">'+c+'</a>' }).join('')+'</nav>'+
+      '<div class="rh-in"><h1 class="rt" id="vh" tabindex="-1">Brands</h1><p class="rm" id="azm">'+(BIDX===null?'<span class="sk w40"></span>':azStat())+'</p></div></section>'+
+    '<div id="azb">'+(BIDX===null?'':azBody())+'</div>';
+}
+function azStat(){ return '<span class="st"><b>'+won(brandList().length)+'</b> <em>Brands</em></span>' }
+function azBody(){
+  var L=brandList(), by={};
+  L.forEach(function(b){ var c=letterOf(b.name); (by[c]=by[c]||[]).push(b) });
+  var letters=keys(by).sort(function(x,y){ return x==='#'?-1:y==='#'?1:x<y?-1:x>y?1:0 }), id=function(c){ return c==='#'?'num':c };
+  return '<nav class="az-l'+(letters.length>9?' many':'')+'" aria-label="A to Z">'+letters.map(function(c){ return '<a href="#az-'+id(c)+'" data-az="'+id(c)+'">'+c+'</a>' }).join('')+'</nav>'+
     '<div class="az">'+letters.map(function(c){
-      return '<section class="az-s" id="az-'+c+'" aria-labelledby="azh-'+c+'"><h2 id="azh-'+c+'">'+c+'</h2><ul>'+
-        by[c].map(function(b){ return '<li><a href="'+b.href+'"><span class="az-n">'+esc(b.name)+'</span><span class="n" id="azn-'+b.a+'"></span></a></li>' }).join('')+
+      return '<section class="az-s" id="az-'+id(c)+'" aria-labelledby="azh-'+id(c)+'"><h2 id="azh-'+id(c)+'">'+c+'</h2><ul>'+
+        by[c].map(function(b){
+          if(!b.href) return '<li><span class="az-x"><span class="az-n">'+esc(b.name)+'</span></span></li>';
+          return '<li><a href="'+b.href+'"><span class="az-n">'+esc(b.name)+'</span><span class="n"'+(isB(b.a)?'>'+won(b.n):' id="azn-'+b.a+'">')+'</span></a></li>' }).join('')+
       '</ul></section>' }).join('')+'</div>';
 }
 function brandsUpdate(gen){
+  var fillA=function(){ AS.forEach(function(a){ var n=$('azn-'+a); if(n && DATA[a]) n.textContent=won(DATA[a].__cards) }); azPhoto() };
+  if(BIDX===null) bidx().then(function(){ if(gen!==GEN) return; var b=$('azb'), m=$('azm'); if(b && m){ m.innerHTML=azStat(); b.innerHTML=azBody(); fillA() } });
   AS.forEach(function(a){
-    var fill=function(){ if(gen!==GEN) return; var n=$('azn-'+a); if(n && DATA[a]) n.textContent=won(DATA[a].__cards); azPhoto() };
+    var fill=function(){ if(gen!==GEN) return; fillA() };
     if(DATA[a]) fill(); else load(a).then(fill,function(){});
   });
 }
@@ -1110,7 +1334,8 @@ function seek(a){
   var mk=null, REG={'일본':'Japan','한국':'Korea','해외':'Elsewhere'}, NOTE={'낙찰가':'Sold prices','구매대행':'Proxy','판매 완료':'Sold','유럽':'EU','미국':'US'};
   p.SEEK.forEach(function(sk){
     if(sk[0]!==mk){ if(mk) h+='</div></div>'; mk=sk[0]; h+='<div class="mkt"><span class="mkt-n">'+esc(REG[mk]||mk)+'</span><div class="mkt-l">' }
-    var qq=p.seekQuery(parts,sk[2]), url=okUrl(sk[3](qq,qq===p.SEEKBRAND[sk[2]]));
+    // the bare-name pages (a designer page, a brand page) are CCP's own; a brand searches its name instead
+    var qq=p.seekQuery(parts,sk[2]), url=okUrl(sk[3](qq,!isB(a) && qq===p.SEEKBRAND[sk[2]]));
     if(url) h+='<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(sk[1])+(sk[4]?'<small>'+esc(NOTE[sk[4]]||sk[4])+'</small>':'')+'</a>';
   });
   el.innerHTML=h+'</div></div></div>'; el.hidden=false;
@@ -1120,7 +1345,18 @@ function seek(a){
 function savedShell(){
   return '<section class="vh"><h1 id="vh" tabindex="-1">Saved</h1><p class="rm" id="svm"><span class="sk w40"></span></p></section>'+
     '<div id="svb">'+AS.map(function(a){ return '<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'">'+esc(ARCH[a].name)+'<span class="n" id="sgn-'+a+'"></span></h2>'+
-      '<div class="grid" id="sgg-'+a+'"></div><ul class="miss" id="sgm-'+a+'" hidden></ul></section>' }).join('')+'</div>';
+      '<div class="grid" id="sgg-'+a+'"></div><ul class="miss" id="sgm-'+a+'" hidden></ul></section>' }).join('')+'<div id="svbr"></div></div>';
+}
+// the brands' saved listings by brand: '<slug>|<key>' → {slug: [keys]} ('' for keys of no brand)
+function bSavedBy(){
+  var by={};
+  keys(SAVED.brx||{}).forEach(function(k){ var i=k.indexOf('|'), s=i>0?k.slice(0,i):''; if(!SLUG.test(s)) s=''; (by[s]=by[s]||[]).push(k) });
+  return by;
+}
+function bSavedPending(){
+  var by=bSavedBy(), ss=keys(by); if(!ss.length) return false;
+  if(BIDX===null) return true;
+  return ss.some(function(s){ var a='b:'+s; return own.call(ARCH,a) && !DATA[a] && !FAIL[a] });
 }
 var SAVEDLIST=[];
 function savedUpdate(gen){
@@ -1146,9 +1382,37 @@ function savedUpdate(gen){
         (ok?'<a href="'+esc(ok)+'" target="_blank" rel="noopener noreferrer">Listing</a>':'')+
         '<button type="button" class="lnk" data-unsave="'+esc(a)+'" data-u="'+esc(u)+'">Remove</button></li>' }).join('');
   });
+  // the brands after the archives, a section each, A–Z (a saved key names its brand and the listing's key, not its address)
+  var by=bSavedBy(), ss=keys(by), bx=$('svbr'), bh='';
+  ss.forEach(function(s){ total+=by[s].length });
+  if(ss.length && BIDX===null) bidx().then(function(){ if(gen===GEN) savedUpdate(gen) });
+  if(!ss.length || BIDX===null) bx.innerHTML='';
+  else if(!BIDX) bx.innerHTML='<section class="sg" aria-labelledby="sgh-brx"><h2 class="sg-h" id="sgh-brx">Brands<span class="n">'+won(ss.reduce(function(n,s){ return n+by[s].length },0))+'</span></h2>'+
+      '<div class="err" role="alert"><p class="err-t">Brands · Could not load</p><p class="err-a"><button type="button" class="btn" data-retry="brx">Retry</button></p></div></section>';
+  else {
+    var bm=SAVED.brx;
+    ss.map(function(s){ var a='b:'+s; return {s:s, a:a, name:own.call(ARCH,a)?ARCH[a].name:own.call(BENTRY,s)?BENTRY[s].n:(s||'Brands')} })
+      .sort(function(x,y){ return cmpName({n:x.name},{n:y.name}) }).forEach(function(g){
+        var ks=by[g.s], a=g.a, known=!!g.s && own.call(ARCH,a), d=known?DATA[a]:null, body;
+        if(known && !d){
+          if(!FAIL[a]) load(a).then(function(){ if(gen===GEN) savedUpdate(gen) },function(){ if(gen===GEN) savedUpdate(gen) });
+          body=FAIL[a]?errBox(a):'<div class="grid">'+skel(Math.min(4,ks.length))+'</div>';
+        } else {
+          var have=[], lost=[];
+          ks.forEach(function(k){ var key=k.slice(k.indexOf('|')+1), it=d && own.call(d.__byKey,key) ? d.__byKey[key] : null; if(it) have.push(it); else lost.push(k) });
+          have.sort(function(x,y){ var bx0=bm[skey(x)], by0=bm[skey(y)]; return String((by0&&by0.d)||'').localeCompare(String((bx0&&bx0.d)||'')) || y.k-x.k });
+          SAVEDLIST=SAVEDLIST.concat(have);
+          body='<div class="grid">'+have.map(function(it,i){ return card(it,{change:true, eager:i<2}) }).join('')+'</div>'+
+            (lost.length?'<ul class="miss">'+lost.map(function(k){ return '<li><span class="miss-l">Not in today’s list</span>'+
+              '<button type="button" class="lnk" data-unsave="brx" data-u="'+esc(k)+'">Remove</button></li>' }).join('')+'</ul>':'');
+        }
+        bh+='<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'">'+esc(g.name)+'<span class="n">'+won(ks.length)+'</span></h2>'+body+'</section>';
+      });
+    bx.innerHTML=bh; bindImgs(bx);
+  }
   $('svm').innerHTML=total?'<span><b>'+won(total)+'</b> '+(total===1?'Item':'Items')+'</span><span>Kept in this browser</span>':'<span>Nothing saved</span>';
   var box=$('svb'); if(box && !box.__b){ box.__b=1; box.addEventListener('click',function(e){ var b=e.target.closest('[data-unsave]'); if(!b) return;
-    var a=b.getAttribute('data-unsave'), u=b.getAttribute('data-u'), m=readSaved(a); if(!own.call(ARCH,a)) return; delete m[u]; lsSet(ARCH[a].sk,JSON.stringify(m)); SAVED[a]=m; savedUi(); refresh() }) }
+    var s=b.getAttribute('data-unsave'), u=b.getAttribute('data-u'); if(!own.call(STORES,s)) return; var m=readSaved(s); delete m[u]; lsSet(STORES[s],JSON.stringify(m)); SAVED[s]=m; savedUi(); refresh() }) }
 }
 
 /* ---------------------------------------------------------------- about */
@@ -1201,15 +1465,19 @@ function listFor(it){
   return null;
 }
 function findItem(k){
-  var order=ST.view==='room'?[ST.a]:AS;
-  for(var i=0;i<order.length;i++){ var d=DATA[order[i]]; if(d && own.call(d.__byKey,k)) return d.__byKey[k] }
+  if(ST.view==='room'){ var dr=DATA[ST.a]; return dr && own.call(dr.__byKey,k) ? dr.__byKey[k] : null }
+  for(var i=0;i<AS.length;i++){ var d=DATA[AS[i]]; if(d && own.call(d.__byKey,k)) return d.__byKey[k] }
+  // the brands: New in shows today's new ones (new.json), Saved the brands' own data
+  if(ST.view==='new' && BNEW) for(var a in BNEW.byKey) if(own.call(BNEW.byKey,a) && own.call(BNEW.byKey[a],k)) return BNEW.byKey[a][k];
+  if(ST.view==='saved'){ var it=null; keys(bSavedBy()).some(function(s){ var x=itemAt('b:'+s,k); if(x && isSaved(x)) it=x; return !!it }); if(it) return it }
   return null;
 }
 function syncItem(){
   if(!ST.item){ if(DV.it) closeDetail(true); return }
   var it=findItem(ST.item);
   if(!it){
-    var waiting=(ST.view==='room'?[ST.a]:AS).some(function(a){ return !DATA[a] && !FAIL[a] });
+    var waiting=(ST.view==='room'?[ST.a]:AS).some(function(a){ return !DATA[a] && !FAIL[a] }) ||
+      (ST.view==='new' && BNEW===null) || (ST.view==='saved' && bSavedPending());
     if(waiting) return;
     ST.item=null; writeUrl(false); if(DV.it) closeDetail(true); return;
   }
@@ -1322,11 +1590,12 @@ function detailHtml(it,lo){
   var a=it.__a, A=ARCH[a], p=P[a], ph=p.photosOf(it), on=isSaved(it), d=DATA[a];
   var pos=DV.list&&DV.idx>=0?won(DV.idx+1)+' / '+won(DV.list.length):'';
   var link=okUrl(it.l), bee=!it.so && p.buyeeUrl(it.l);
-  var mcN=it.mc && p.codeNum ? (MCOUNT[a][p.codeNum(it.mc)]||0) : 0;
-  var seen=p.seenText(it), stop=SRCSEEN[a][it.r] && d.today && SRCSEEN[a][it.r]<d.today;
+  var mcN=it.mc && p.codeNum && MCOUNT[a] ? (MCOUNT[a][p.codeNum(it.mc)]||0) : 0;
+  var seenAt=SRCSEEN[a] && own.call(SRCSEEN[a],it.r) ? SRCSEEN[a][it.r] : null;
+  var seen=p.seenText(it), stop=seenAt && d && d.today && seenAt<d.today;
   var kv='<dt>사이즈</dt><dd>'+(it.z?esc(it.z):'미표기')+'</dd>'+
     '<dt>분류</dt><dd>'+esc(it.s)+'</dd>'+
-    (it.mc?'<dt>번호</dt><dd><span class="mc">'+esc(it.mc)+'</span>'+(mcN>1?' <button type="button" class="lnk" data-code="'+esc(p.codeNum(it.mc))+'">같은 번호 '+won(mcN)+'건</button>':'')+' <span class="basis">상품명</span></dd>':'')+
+    (it.mc && !isB(a)?'<dt>번호</dt><dd><span class="mc">'+esc(it.mc)+'</span>'+(mcN>1?' <button type="button" class="lnk" data-code="'+esc(p.codeNum(it.mc))+'">같은 번호 '+won(mcN)+'건</button>':'')+' <span class="basis">상품명</span></dd>':'')+
     '<dt>연도</dt><dd>'+yearLine(it)+'</dd>'+
     (it.__mk.length?'<dt>표기</dt><dd>'+it.__mk.map(function(k){ return esc(p.MARKLBL[k]||k) }).join(' · ')+' <span class="basis">상품명</span></dd>':'')+
     '<dt>판매처</dt><dd>'+esc(it.r)+'</dd>'+
@@ -1427,6 +1696,7 @@ function openSearch(){
   $('searchBtn').setAttribute('aria-expanded','true');
   var q=$('sq'); q.value=ST.view==='room'?ST.F.q:''; q.focus(); q.select();
   AS.forEach(function(a){ if(!DATA[a] && !FAIL[a]) load(a).then(runSearch,function(){ runSearch() }) });
+  if(BIDX===null) bidx().then(function(){ runSearch() });
   runSearch();
   var hint=hints();
   $('sHint').innerHTML='<span class="lbl">Try</span>'+hint.map(function(h){ return '<button type="button" data-hint="'+esc(h)+'">'+esc(h)+'</button>' }).join('');
@@ -1444,12 +1714,35 @@ function closeSearch(silent){
   if(REDUCED.matches) fin(); else setTimeout(fin,200);
   if(!silent) $('searchBtn').focus();
 }
+// brand names that answer the query: the start of a name first, then the start of a word in it, then anywhere in it;
+// letters only (so rickowens, Rick-Owens and RICK OWENS are one), accents and widths folded
+function bfold(s){ return fold(s).toLowerCase().replace(/[^\p{L}\p{N}\p{M}]+/gu,' ').trim() }
+function brandHits(q){
+  if(!BIDX) return [];
+  var f=bfold(q), fc=f.replace(/ /g,''); if(!fc || (fc.length<2 && /^[\x00-\x7f]+$/.test(fc))) return [];
+  var out=[];
+  brandList().forEach(function(x){ if(!x.href) return;
+    var best=0;
+    [x.name].concat(x.al||[]).forEach(function(n){ var t=bfold(n), tc=t.replace(/ /g,''), sc=0;
+      if(tc.indexOf(fc)===0) sc=3; else if((' '+t).indexOf(' '+f)>=0) sc=2; else if(tc.indexOf(fc)>=0) sc=1;
+      if(sc>best) best=sc });
+    if(best) out.push({x:x, sc:best});
+  });
+  return out.sort(function(p,q2){ return q2.sc-p.sc || (q2.x.n||0)-(p.x.n||0) || cmpName({n:p.x.name},{n:q2.x.name}) }).map(function(r){ return r.x });
+}
+function brandHitsHtml(q){
+  var L=brandHits(q); if(!L.length) return '';
+  return '<section class="sr-g sr-bg"><h3>Brands<span class="n">'+won(L.length)+'</span></h3><ul>'+L.slice(0,6).map(function(x){
+    var ph=x.ph || (DATA[x.a] ? (heroPick(x.a,DATA[x.a],'search')||{}).i : '');
+    return '<li><a class="sr-i sr-bi" href="'+x.href+'"><span class="sr-ph">'+imgTag(x.a,ph,160)+'</span><span class="sr-t">'+esc(x.name)+'</span>'+
+      '<span class="sr-p">'+(x.n?won(x.n)+' '+(x.n===1?'Item':'Items'):'')+'</span></a></li>' }).join('')+'</ul></section>';
+}
 function runSearch(){
   var s=$('search'); if(s.hidden) return;
   var q=$('sq').value.replace(/\s+/g,' ').trim().toLowerCase().slice(0,80), out=$('sres');
   SRES=[]; SSEL=-1;
   if(!q){ out.innerHTML=''; return }
-  var h='';
+  var h=brandHitsHtml(q);
   AS.forEach(function(a){
     var A=ARCH[a], d=DATA[a];
     h+='<section class="sr-g"><h3>'+esc(A.name)+'<span class="n" id="srn-'+a+'"></span></h3>';
@@ -1477,7 +1770,7 @@ $('sq').addEventListener('input',function(){ clearTimeout(SQT); SQT=setTimeout(r
 $('sq').addEventListener('keydown',function(e){
   var items=$('sres').querySelectorAll('a.sr-i, a.sr-all');
   if(e.key==='ArrowDown' || e.key==='ArrowUp'){ if(!items.length) return; e.preventDefault(); SSEL=(SSEL+(e.key==='ArrowDown'?1:-1)+items.length)%items.length; items[SSEL].focus(); return }
-  if(e.key==='Enter'){ var first=$('sres').querySelector('a.sr-all'); if(first){ e.preventDefault(); first.click() } }
+  if(e.key==='Enter'){ var first=$('sres').querySelector('a.sr-all')||$('sres').querySelector('a.sr-bi'); if(first){ e.preventDefault(); first.click() } }
 });
 $('sres').addEventListener('keydown',function(e){
   if(e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
@@ -1511,7 +1804,7 @@ doc.addEventListener('click',function(e){
   if(sk){ var tid=(sk.getAttribute('href')||'').replace(/^#/,''), tg=$(tid); if(tg){ e.preventDefault(); if(!tg.hasAttribute('tabindex')) tg.setAttribute('tabindex','-1'); tg.focus({preventScroll:true});
       var y=tg.getBoundingClientRect().top+window.scrollY-(tid==='listH'?140:0); window.scrollTo(0,Math.max(0,y)) } return }
   var mmp=e.target.closest('.mm-p'); if(mmp){ var ar0=$('arch'); if(ar0) ar0.classList.add('mm-off'); if(doc.activeElement && mmp.contains(doc.activeElement)) doc.activeElement.blur() }
-  var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry'); delete FAIL[ra]; refresh(); if(ST.view==='home') homeUpdate(GEN); return }
+  var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry'); if(ra==='brx'){ if(BIDX===false) BIDX=null } else delete FAIL[ra]; refresh(); if(ST.view==='home') homeUpdate(GEN); return }
   var tt=e.target.closest('[data-tt]'); if(tt){ TODAYTAB=tt.getAttribute('data-tt'); var tb=$('todayT').querySelectorAll('[data-tt]');
     for(var ti=0;ti<tb.length;ti++) tb[ti].setAttribute('aria-pressed',String(tb[ti]===tt)); todayPaint(); return }
   var nt=e.target.closest('[data-nt]'); if(nt){ if(nt.disabled) return; NEWTAB=nt.getAttribute('data-nt'); newUpdate(GEN); return }
@@ -1615,12 +1908,14 @@ megaMenus();
 ST=readUrl(location.search);
 if(ST.view!=='room') writeUrl(false);
 if(ST.view==='home'){ AS.forEach(function(a){ load(a).catch(function(){}) }) }
-mount(); update(); syncItem();
+route(null);   // mount, update, open the listing in the address — a brand room once the brand index is here
+bidx();        // the brand index, small, asked for after the room's own data
 // the other archive, quietly, so switching rooms is instant — but only after the room being read has its
 // own data: on a slow line the two downloads would otherwise share it and the first cards come later
 var SAVE=navigator.connection && navigator.connection.saveData;
 function prefetch(){ AS.forEach(function(a){ if(!DATA[a] && !PEND[a] && !FAIL[a]) load(a).then(drawerMeta,function(){}) }) }
-if(!SAVE){ var first=ST.view==='room' ? PEND[ST.a] : null;
+if(!SAVE){ var first=ST.view!=='room' ? null : !isB(ST.a) ? PEND[ST.a] :
+    bidx().then(function(){ return ST.view==='room' && own.call(ARCH,ST.a) ? load(ST.a) : null });
   if(first) first.then(function(){ setTimeout(prefetch,600) },function(){ setTimeout(prefetch,600) });
   else setTimeout(prefetch,1500) }
 if(DATA.hl || DATA.ccp) drawerMeta();

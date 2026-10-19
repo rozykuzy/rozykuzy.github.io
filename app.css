@@ -171,6 +171,18 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
 .tab:disabled{cursor:default;color:var(--soft)}
 .sec-more{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:40px}
 .vtabs{padding:0 var(--X)}
+/* the brands with today's new listings: a photograph, the name, the count (two columns on a phone, four from 768) */
+.bgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:var(--gapc);row-gap:var(--gapr)}
+.bt{display:block;min-width:0;text-align:center;text-decoration:none;color:var(--ink2)}
+.bt .ph img{transition:opacity .4s var(--ease),transform 1.2s var(--out)}
+.bt-n{display:block;padding:14px 4px 0;font:500 13px/1.5 var(--sans);letter-spacing:.02em;text-transform:uppercase;overflow-wrap:anywhere}
+.bt-s{display:block;margin-top:4px;font:500 11px/1.5 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--mid)}
+.bt-s em{font-style:normal}
+.bt-s b{font-weight:600;margin-left:6px;color:var(--ink);font-variant-numeric:tabular-nums}
+@media(hover:hover){
+  .bt:hover .bt-n{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+  html.fx .bt:hover .ph img.on{transform:scale(1.03)}
+}
 
 /* ---------------------------------------------------------------- cards: a photograph and its label, centred */
 .grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));column-gap:var(--gapc);row-gap:var(--gapr)}
@@ -435,7 +447,14 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
 .az-s ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 24px}
 .az-s a{display:inline-flex;align-items:baseline;gap:8px;padding:6px 0;text-decoration:none;font:400 15px/1.5 var(--sans);letter-spacing:.02em;text-transform:uppercase}
 .az-s a .n{font-size:11px;letter-spacing:.06em;color:var(--mid);font-variant-numeric:tabular-nums}
+.az-s li{min-width:0}
+.az-s .az-n{overflow-wrap:anywhere}
 .az-s a:hover .az-n{text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:1px}
+/* every letter (the brand index): nine to a row on a phone, one ruled line across the page from 768 */
+.az-l.many{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:0}
+.az-l.many a{min-width:0}
+/* a brand without listings: its name, not a link */
+.az-s .az-x{display:inline-flex;padding:6px 0;font:400 15px/1.5 var(--sans);letter-spacing:.02em;text-transform:uppercase;color:var(--mid)}
 
 /* ---------------------------------------------------------------- detail: a product page over the page */
 .ov{position:fixed;inset:0;z-index:80}
@@ -549,6 +568,7 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
 .sr-i:hover .sr-t,.sr-i:focus .sr-t{text-decoration:underline;text-underline-offset:3px}
 .sr-m{font-size:13px;color:var(--mid);padding:4px 0}
 .sr-all{display:inline-flex;gap:8px;margin-top:12px;font:600 11px/1 var(--sans);letter-spacing:.12em;text-decoration:underline;text-underline-offset:5px}
+.sr-bi .sr-p{font-size:11px;letter-spacing:.12em;text-transform:uppercase}
 .so-hint{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:16px var(--X) 22px}
 .so-hint .lbl{display:inline;margin:0 6px 0 0;font:600 11px/1 var(--sans);letter-spacing:.12em;color:var(--mid)}
 .so-hint button{height:36px;padding:0 12px;border:1px solid var(--line);font-size:13px;line-height:1;transition:border-color .2s}
@@ -616,6 +636,10 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
   .sr-g+.sr-g{border-top:0}
   .az-s ul{grid-template-columns:repeat(3,minmax(0,1fr))}
   .side-foot{padding-left:30px;padding-right:30px}
+  .bgrid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .az-l.many{display:flex;flex-wrap:nowrap;justify-content:space-between}
+  .sr-bg{grid-column:1/-1;border-bottom:1px solid var(--line)}
+  .sr-bg ul{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:32px}
 }
 @media(min-width:768px) and (max-width:1023px){ .ops.cols{columns:2;column-gap:28px} .ops.cols li{break-inside:avoid} }
 
@@ -632,7 +656,7 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
   .arch{align-self:stretch}
   .mm{display:flex;align-items:center;align-self:stretch}
   .dv-top{height:72px}
-  .t{font-size:14px}
+  .t,.bt-n{font-size:14px}
   .p{font-size:14px}
   .arch .nm-l{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .wm{font-size:20px;letter-spacing:.32em;padding-left:.32em}
@@ -686,7 +710,15 @@ html.lock,html.lock body,html.lock-side,html.lock-side body{overflow:hidden}
   .mm-e{margin-left:auto;align-self:flex-end}
   .mm-p .mm-all{font-weight:600;font-size:12px;letter-spacing:.1em;text-decoration:underline;text-underline-offset:6px}
   .mm-p :focus-visible{outline-color:var(--ink)}
+  /* every brand, A–Z: compact columns (five, six from 1280), the panel scrolls when the screen is short */
+  #mm-brands{max-height:calc(100vh - var(--topH));overflow-y:auto;overscroll-behavior:contain}
+  .mm-az{flex:1 1 auto;min-width:0}
+  .mm-l.az{columns:5;column-gap:28px}
+  .mm-l.az li{padding:3px 0;font-size:12px;line-height:1.4}
+  .mm-l.az a{padding:0;white-space:normal;font-size:12px;letter-spacing:.08em}
+  .mm-x{display:inline-block;font:400 12px/1.4 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
 }
+@media(min-width:1280px) and (hover:hover) and (pointer:fine){ .mm-l.az{columns:6} }
 @media(min-width:1280px){
   .arch{gap:24px}
   .arch a{font-size:14px}

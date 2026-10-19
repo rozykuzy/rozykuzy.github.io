@@ -1,15 +1,18 @@
-// local preview: the combined site at /, the two archive pages at their real paths
+// local preview: the combined site at /, the two archive pages at their real paths, the brand index at /BRAND/
+// (fixtures/BRAND, built by brandfix.mjs). FAIL=hl,ccp,brand answers 503 for those; BRAND=off answers /BRAND/ with 404,
+// as the site is before the brand pipeline's first run.
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import zlib from 'node:zlib';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const PORT = +process.env.PORT || 8930, FAIL = (process.env.FAIL || '').split(','), SLOW = +process.env.SLOW || 0;
+const PORT = +process.env.PORT || 8930, FAIL = (process.env.FAIL || '').split(','), SLOW = +process.env.SLOW || 0, NOBRAND = process.env.BRAND === 'off';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.json': 'application/json', '.xml': 'application/xml', '.txt': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x'); let p = decodeURIComponent(u.pathname), base = ROOT;
-  for (const [pre, dir, tag] of [['/helmut-lang/', 'fixtures/helmut-lang', 'hl'], ['/ccp/', 'fixtures/ccp', 'ccp']]) {
+  for (const [pre, dir, tag] of [['/helmut-lang/', 'fixtures/helmut-lang', 'hl'], ['/ccp/', 'fixtures/ccp', 'ccp'], ['/BRAND/', 'fixtures/BRAND', 'brand']]) {
     if (p === pre.slice(0, -1)) { res.writeHead(301, { Location: pre }); return res.end() }
     if (p.startsWith(pre)) {
       if (FAIL.includes(tag)) { res.writeHead(503); return res.end('down') }
+      if (tag === 'brand' && NOBRAND) { res.writeHead(404, { 'Content-Type': TYPES['.html'] }); return res.end(fs.readFileSync(path.join(ROOT, '404.html'))) }
       base = path.join(ROOT, dir); p = '/' + p.slice(pre.length);
     }
   }
@@ -26,4 +29,4 @@ http.createServer((req, res) => {
     res.end(body);
   };
   if (SLOW && base !== ROOT) setTimeout(send, SLOW); else send();
-}).listen(PORT, '127.0.0.1', () => console.log('serving on', PORT));
+}).listen(PORT, '127.0.0.1', function () { console.log('serving on', this.address().port) });

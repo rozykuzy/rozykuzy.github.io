@@ -12,7 +12,8 @@ file is renamed "Index Sans" (it may not carry the reserved name) and ships with
 The source file comes from the npm package (npm pack pretendard → package/dist/web/variable/woff2/).
 Kept: Latin, digits and punctuation whole; every Hangul syllable in app.js, engine.js, index.html
 and 404.html; every Hangul syllable in the data fields the interface draws in this face (source,
-category, year claim, size, sale kind) on both fixture pages; and EXTRA below — names that are
+category, year claim, size, sale kind) on both fixture pages and the brand fixtures (fixtures/BRAND/b/*.json);
+and EXTRA below — names that are
 likely to turn up next (platforms, categories). Listing titles are not drawn in this face's Hangul
 (app.css: Index Latin), so they are not needed here.
 """
@@ -39,6 +40,7 @@ UNICODES = ('U+0020-007E,U+00A0-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02D
 
 def data_of(page):
     t = page.read_text('utf8')
+    if page.suffix == '.json': return json.loads(t)
     m = t.find('id="__data"')
     if m < 0: return {}
     s = t.find('>', m) + 1
@@ -49,7 +51,7 @@ def wanted():
     chars = set()
     for f in FILES:
         chars |= set(HANGUL.findall((SITE / f).read_text('utf8')))
-    for fx in FIXTURES:
+    for fx in FIXTURES + sorted(str(f.relative_to(SITE)) for f in (SITE / 'fixtures' / 'BRAND' / 'b').glob('*.json')):
         p = SITE / fx
         if not p.exists(): continue
         d = data_of(p)
