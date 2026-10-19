@@ -33,7 +33,7 @@ function clip(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s }
 // a value inside a selector's quotes (a filter value can hold any character)
 function cssv(v){ v=String(v); try{ if(window.CSS && CSS.escape) return CSS.escape(v) }catch(e){} return v.replace(/["\\\n\r\f]/g,function(c){ return c==='\n'?'\\a ':c==='\r'?'\\d ':c==='\f'?'\\c ':'\\'+c }) }
 // one quiet line for a screen reader (a step in the detail, more listings drawn)
-function live(t){ var el=$('live'); if(!el) return; el.textContent=''; setTimeout(function(){ el.textContent=t },60) }
+function live(t,h){ var el=$('live'); if(!el) return; el.textContent=''; setTimeout(function(){ if(h) el.innerHTML=h; else el.textContent=t },60) }
 // after the next paint: a press shows at once, the work it asks for comes in the following task
 function afterPaint(fn){ requestAnimationFrame(function(){ setTimeout(fn,0) }) }
 // A control the code draws again keeps the keyboard: its new copy takes the focus (known by what it does, its data-*),
@@ -52,13 +52,13 @@ function focusMark(ids){
 }
 function focusBack(m,fb){
   if(!m) return; var cur=doc.activeElement; if(cur && cur!==doc.body && cur!==root) return;
-  var box=$(m.box), t=null;
-  if(box && !box.hidden && box.getClientRects().length){
-    if(m.sel) t=box.querySelector(m.sel);
-    if(!t && m.idx>=0){ var all=box.querySelectorAll(FOC); if(all.length) t=all[Math.min(m.idx,all.length-1)] }
+  var box=$(m.box), t=null, seen=function(x){ return x && x.getClientRects().length };
+  if(box && !box.hidden && seen(box)){
+    if(m.sel){ t=box.querySelector(m.sel); if(!seen(t)) t=null }
+    if(!t && m.idx>=0){ var all=[].filter.call(box.querySelectorAll(FOC),seen); if(all.length) t=all[Math.min(m.idx,all.length-1)] }
   }
-  if(!t && fb) t=typeof fb==='string'?$(fb):fb;
   if(t) try{ t.focus({preventScroll:true}) }catch(e){}
+  if(doc.activeElement!==t && fb){ var f=typeof fb==='string'?$(fb):fb; if(f) try{ f.focus({preventScroll:true}) }catch(e){} }
 }
 // a row of tabs wider than the screen fades at the edge it goes on past
 function edges(){ var ts=doc.querySelectorAll('.tabs'); for(var i=0;i<ts.length;i++) edge1(ts[i]) }
@@ -145,14 +145,15 @@ function extract(t){
   return JSON.parse(t.slice(s,e));
 }
 // A request keeps its status on the error (only a 404 means "not there"), tries once more after a network failure or a
-// server error, gives up after 30 seconds, and lets go when the signal says the reader has left.
+// server error, gives up when no answer has begun in 30 seconds, and lets go when the signal says the reader has left.
 function req(u,o,kind){
   o=o||{};
   var c=window.AbortController?new AbortController():null, up=o.signal, late=false, timer=0;
-  if(c){ timer=setTimeout(function(){ late=true; c.abort() },o.ms||30000);
-    if(up){ if(up.aborted) c.abort(); else up.addEventListener('abort',function(){ c.abort() }) } }
+  if(c && up){ if(up.aborted) c.abort(); else up.addEventListener('abort',function(){ c.abort() }) }
+  // (the 30 seconds are for an answer to begin, each try; the download itself may take as long as the line needs)
+  var arm=function(){ if(!c) return; clearTimeout(timer); timer=setTimeout(function(){ late=true; c.abort() },o.ms||30000) };
   var opt={credentials:'same-origin'}; if(c) opt.signal=c.signal; if(o.low) opt.priority='low';
-  var once=function(){ return fetch(u,opt).then(function(r){
+  var once=function(){ arm(); return fetch(u,opt).then(function(r){ clearTimeout(timer);
     if(!r.ok){ var e=new Error('HTTP '+r.status); e.status=r.status; throw e }
     return kind==='text'?r.text():kind==='none'?r.arrayBuffer().then(function(){ return null }):r.json() }) };
   return once().catch(function(e){
@@ -164,10 +165,13 @@ function req(u,o,kind){
 function getJSON(u,o){ return req(u,o,'json') }
 // an archive's data is in its page; a brand's is a file of its own, read by the brands' copy of the CCP rules
 // (a brand room opened from its address asks for its file at once, beside the brand index: EARLY)
-var EARLY={};
+var EARLY={}, EARLYC={};
 function source(a,sig){
-  if(isB(a)){ var early=EARLY[a]; delete EARLY[a];
-    return Promise.all([early||getJSON(ARCH[a].path,{signal:sig}), bengine()]).then(function(r){ bprof(a); return r[0] }) }
+  if(isB(a)){ var early=EARLY[a], ec=EARLYC[a]; delete EARLY[a]; delete EARLYC[a];
+    var get=function(){ return getJSON(ARCH[a].path,{signal:sig}) };
+    if(early && ec && sig) sig.addEventListener('abort',function(){ ec.abort() });
+    return Promise.all([early ? early.catch(function(e){ if(sig && sig.aborted) throw e; return get() }) : get(), bengine()])
+      .then(function(r){ bprof(a); return r[0] }) }
   return req(ARCH[a].path,{signal:sig},'text').then(extract);
 }
 // a brand's download stops when the reader leaves its room (Saved shows several brands and keeps them)
@@ -186,6 +190,7 @@ function load(a){
 }
 function letGo(){
   for(var a in CTL) if(own.call(CTL,a) && CTL[a] && !(ST.view==='room' && ST.a===a) && ST.view!=='saved') CTL[a].abort();
+  for(var e in EARLYC) if(own.call(EARLYC,e) && !(ST.view==='room' && ST.a===e)){ if(EARLYC[e]) EARLYC[e].abort(); delete EARLYC[e]; delete EARLY[e] }
 }
 
 /* ---------------------------------------------------------------- brands: the index, their reader, today's new ones
@@ -306,7 +311,7 @@ function bnewReady(x){
 function itemAt(a,k){
   var d=DATA[a], m=BNEW && own.call(BNEW.byKey,a) ? BNEW.byKey[a] : null;
   var x=d && own.call(d.__byKey,k) ? d.__byKey[k] : null, y=m && own.call(m,k) ? m[k] : null;
-  return ST.view==='new' ? (y||x) : (x||y);
+  return ST.view==='new'||ST.view==='home' ? (y||x) : (x||y);
 }
 // What a listing says is shown as it says it. What the code keeps beside it (the __ fields) never comes from the data,
 // and the few fields drawn into the page whole are checked first: a currency is three capitals, offers are objects,
@@ -620,6 +625,7 @@ function route(prev, after, place){
     bidx().then(function(){
       if(ST!==want) return;
       if(!own.call(ARCH,ST.a)){
+        if(EARLYC[ST.a]){ EARLYC[ST.a].abort(); delete EARLYC[ST.a]; delete EARLY[ST.a] }
         if(BERR){ brandDown(); return }
         var s=slugOf(ST.a), e=own.call(BENTRY,s)?BENTRY[s]:null;
         if(e && e.ex){ ST={view:'room', a:e.ex, F:ST.F, sort:ST.sort, item:ST.item}; tidy(ST) }
@@ -633,7 +639,7 @@ function route(prev, after, place){
   var key=ST.view+':'+(ST.a||'');
   if(prev && key===MOUNTED){
     // a change inside the same room: the press is drawn first, the listings follow (unless something waits on them)
-    if(filterKey()!==LASTQ){ if(after) update(); else soonUpdate() }
+    if(filterKey()!==LASTQ){ if(after || ST.item || DV.it) update(); else soonUpdate() }
     syncItem(); if(after) after(); return;
   }
   var run=function(){ mount(); update(); syncItem();
@@ -693,13 +699,17 @@ function navUi(){
     if(on) ls[i].setAttribute('aria-current','page'); else ls[i].removeAttribute('aria-current') }
 }
 
-function mount(){
-  MOUNTED=ST.view+':'+(ST.a||''); LASTQ=null; GEN++; WAITED={}; AUTO=false;
+// what every change of view does first: a new generation, the listing closed, downloads the new view does not need let go,
+// and a filter drawer left open (it belongs to the page being replaced) let go with its lock
+function leave(){
+  LASTQ=null; GEN++; WAITED={}; AUTO=false; SOON=0;
   if(IO){ IO.disconnect(); IO=null }
   closeDetail(true);
   letGo();
-  // a filter drawer left open belongs to the page being replaced
-  if(root.classList.contains('lock-side')){ root.classList.remove('lock-side'); sideInert(false) }
+  if(LAYER.side){ LAYER.side=false; layers() }
+}
+function mount(){
+  MOUNTED=ST.view+':'+(ST.a||''); leave();
   setRoom(roomOf());
   var m=$('main');
   if(ST.view==='room') m.innerHTML=roomShell(ST.a);
@@ -722,7 +732,7 @@ function update(){
 }
 function refresh(){ LASTQ=null; update() }
 var SOON=0;
-function soonUpdate(){ if(SOON) return; var g=GEN; SOON=1; afterPaint(function(){ SOON=0; if(g===GEN && filterKey()!==LASTQ) update() }) }
+function soonUpdate(){ var g=GEN; if(SOON===g) return; SOON=g; afterPaint(function(){ if(SOON===g) SOON=0; if(g===GEN && filterKey()!==LASTQ) update() }) }
 // A view that waits on several downloads (Saved, New in) waits on each once, and draws again at most once a frame.
 var WAITED={}, AGAIN={};
 function waitOn(gen,key,pr,fn){ var k=gen+'|'+key; if(WAITED[k]) return; WAITED[k]=1; var go1=function(){ again(gen,fn) }; pr.then(go1,go1) }
@@ -730,8 +740,7 @@ function again(gen,fn){ if(gen!==GEN || AGAIN[gen]) return; AGAIN[gen]=1; reques
 // a brand address while the brand index could not be read: the address stays, the page says so
 function brxErr(){ return '<div class="err" role="alert"><p class="err-t">Brands · Could not load</p><p class="err-a"><button type="button" class="btn" data-retry="brx">Retry</button></p></div>' }
 function brandDown(){
-  MOUNTED='down:'+ST.a; LASTQ=null; GEN++; WAITED={};
-  closeDetail(true); letGo(); setRoom('home');
+  MOUNTED='down:'+ST.a; leave(); setRoom('home');
   $('main').innerHTML='<section class="vh"><h1 id="vh" tabindex="-1" lang="en">Brands</h1></section><div class="body">'+brxErr()+'</div>';
   navUi(); doc.title='Brands — Archive Index'; focusHead();
 }
@@ -811,8 +820,8 @@ function card(it,o){
       '<div class="vd">'+(o.tag?'<span class="at">'+atName(a)+'</span>':'')+yearPart(it)+'</div>'+
       '<h3 class="t"'+tl(it)+'><a href="'+roomHref(a)+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
       wasSr(p.priceHtml(it,false))+
-      (st?'<div class="fl">'+st+'</div>':'')+
-      (ch?'<div class="chg">'+(ch.gone?'Delisted since saved':'Lower since saved '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
+      (st?'<div class="fl" lang="en">'+st+'</div>':'')+
+      (ch?'<div class="chg" lang="en">'+(ch.gone?'Delisted since saved':'Lower since saved '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
       '<div class="sub">'+subLine(it)+'</div>'+
     '</div></article>';
 }
@@ -948,8 +957,8 @@ var TODAYLIST=[], TODAYTAB='all', TODAYPER={}, TODAYSRC=[];
 function todayUpdate(gen){
   if(gen!==GEN) return;
   var g=$('tgrid'); if(!g) return;
-  // (drawn when the two archives are here; the brands join when new.json is here, usually before)
-  var done=AS.every(function(a){ return DATA[a] || FAIL[a] }); if(!done) return;
+  // (drawn once, when the two archives and the brands' new listings are here — not twice with cards changing places)
+  var done=AS.every(function(a){ return DATA[a] || FAIL[a] }) && !(BNEW===null && BIDX!==false); if(!done) return;
   var fm=focusMark(['todayT']);
   var per={}, total=0, src=AS.slice();
   AS.forEach(function(a){ per[a]=newOf(a); total+=per[a].length });
@@ -967,10 +976,8 @@ function todayPaint(){
   var g=$('tgrid'); if(!g) return;
   var per=TODAYPER, out=[], src=TODAYSRC;
   if(TODAYTAB==='all'){
-    // a few from each, then more from whichever has them, sixteen at most
-    var want=src.length>2?{hl:6, ccp:4, brands:6}:{hl:10, ccp:6};
-    src.forEach(function(a){ out=out.concat((per[a]||[]).slice(0,want[a])) });
-    src.forEach(function(a){ if(out.length<16) out=out.concat((per[a]||[]).slice(want[a], want[a]+(16-out.length))) });
+    // one from each in turn (the first row shows all of them), sixteen at most
+    for(var i=0;i<16 && out.length<16;i++) src.forEach(function(a){ var x=(per[a]||[])[i]; if(x && out.length<16) out.push(x) });
   } else out=(per[TODAYTAB]||[]).slice(0,16);
   TODAYLIST=out;
   var bad=AS.filter(function(a){ return FAIL[a] }).map(function(a){ return esc(ARCH[a].name)+' · Could not load' });
@@ -1204,18 +1211,18 @@ function roomShell(a){
       '<div class="count" id="count" role="status" aria-live="polite" lang="en"></div>'+
     '</div></div>'+
     '<div class="side-shade" id="sideShade" hidden></div>'+
-    // a dialog over the page: the page behind it is inert while it is open (sideInert)
+    // a dialog over the page: the page behind it is inert while it is open (layers: it sits inside main, so main's parts)
     '<div class="side shut" id="side" role="dialog" aria-modal="true" aria-labelledby="sideH">'+
-      '<div class="side-top" lang="en"><div class="side-tt"><h2 id="sideH">Filter and sort</h2><p class="side-n" id="sideN"></p></div>'+
+      '<div class="side-top" lang="en"><div class="side-tt"><h2 id="sideH">Filter and sort</h2><p class="side-n" id="sideN" role="status" aria-live="polite"></p></div>'+
         '<button type="button" class="ico" id="sideX" aria-label="Close filters">'+ICO.x+'</button></div>'+
       '<div class="side-in">'+
         '<details class="fg fg-sort" open><summary lang="en">Sort by</summary><ul class="ops" id="f-sort" lang="en"></ul></details>'+
         grp('y','<div class="yrs" id="f-y" lang="en"></div>')+
         grp('cert','<ul class="ops" id="f-cert"></ul>')+
-        grp('motif','<ul class="ops cols" id="f-motif"></ul>','g-motif')+
+        grp('motif','<ul class="ops cols" id="f-motif" lang="en"></ul>','g-motif')+
         grp('src','<ul class="ops" id="f-src"></ul>')+
         grp('price','<ul class="ops" id="f-price" lang="en"></ul>')+
-        grp('mark','<ul class="ops" id="f-mark"></ul>','g-mark')+
+        grp('mark','<ul class="ops" id="f-mark" lang="en"></ul>','g-mark')+
         grp('flag','<ul class="ops" id="f-flag" lang="en"></ul>')+
         '<details class="fg" open><summary lang="en">Size</summary><label class="sr" for="fsize" lang="en">Size</label><input class="fsize" id="fsize" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="48 · M · 32"></details>'+
       '</div>'+
@@ -1237,7 +1244,7 @@ function sideOpen(on){
   var s=$('side'), t=$('ftog'), sh=$('sideShade'); if(!s||!t) return;
   if(on){ clearTimeout(sideOpen.t); s.classList.remove('shut') }
   s.classList.toggle('open',on); t.setAttribute('aria-expanded',String(on));
-  root.classList.toggle('lock-side',on); sideInert(on);
+  LAYER.side=on; layers();
   if(sh){
     if(on){ sh.hidden=false; nextFrame(function(){ if(s.classList.contains('open')) sh.classList.add('on') }) }
     else { sh.classList.remove('on'); setTimeout(function(){ if(!sh.classList.contains('on')) sh.hidden=true },REDUCED.matches?0:320) }
@@ -1249,11 +1256,6 @@ function sideOpen(on){
     if(doc.activeElement && s.contains(doc.activeElement)) t.focus({preventScroll:true});
     sideOpen.t=setTimeout(function(){ if(!s.classList.contains('open')) s.classList.add('shut') },REDUCED.matches?0:380);
   }
-}
-// while the drawer is open the page around it is out of reach (it sits inside main, so main's parts, not main)
-function sideInert(on){
-  [$('top'),$('foot'),doc.querySelector('.skip'),doc.querySelector('#main > .rh'),$('cats'),$('bar'),doc.querySelector('#main > .body')].forEach(function(el){
-    if(!el) return; if(on){ el.setAttribute('inert',''); el.setAttribute('aria-hidden','true') } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden') } });
 }
 var qTimer=null, zTimer=null, SORTB4=null, IO=null, AUTO=false;
 var LAY=lsGet('aix.layout')==='list'?'list':'grid';
@@ -1534,8 +1536,8 @@ function offY(F,r){ var m=/^(\d{4})-(\d{4})$/.exec(r); if(m){ for(var y=+m[1];y<
 function applied(a){
   var t=tokens(a), el=$('applied');
   el.hidden=!t.length;
-  el.innerHTML=t.map(function(x){ return '<button type="button" class="tok" data-off="'+x.g+'" data-v="'+esc(x.v)+'" aria-label="Remove '+esc(x.l)+'">'+esc(x.l)+'<span aria-hidden="true">'+ICO.xs+'</span></button>' }).join('')+
-    (t.length>1?'<button type="button" class="tok all" data-off="all">Clear all</button>':'');
+  el.innerHTML=t.map(function(x){ return '<button type="button" class="tok" data-off="'+x.g+'" data-v="'+esc(x.v)+'"><span class="sr" lang="en">Remove </span>'+esc(x.l)+'<span aria-hidden="true">'+ICO.xs+'</span></button>' }).join('')+
+    (t.length>1?'<button type="button" class="tok all" data-off="all" lang="en">Clear all</button>':'');
 }
 function medianOf(a){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){ return x-y }), m=s.length>>1; return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2) }
 function countLine(a){
@@ -1575,7 +1577,7 @@ function empty(a){
   g.innerHTML='';
   var t=tokens(a), h='<p class="empty-t" lang="en">No results</p>';
   if(t.length){ h+='<div class="empty-o">'+t.map(function(x){ var n=countWithout(a,x.g,x.v);
-      return '<button type="button" class="btn ghost" data-off="'+x.g+'" data-v="'+esc(x.v)+'">Remove '+esc(x.l)+'<sup>'+won(n)+'</sup></button>' }).join('')+'</div>' }
+      return '<button type="button" class="btn ghost" data-off="'+x.g+'" data-v="'+esc(x.v)+'"><span lang="en">Remove</span> '+esc(x.l)+'<sup>'+won(n)+'</sup></button>' }).join('')+'</div>' }
   e.innerHTML=h; e.hidden=false;
 }
 function seek(a){
@@ -1627,7 +1629,7 @@ function savedUpdate(gen){
     total+=urls.length;
     $('sgn-'+a).textContent=won(urls.length);
     sec.hidden=!urls.length;
-    if(!urls.length){ g.innerHTML=''; miss.hidden=true; return }
+    if(!urls.length){ g.innerHTML=''; miss.hidden=true; miss.innerHTML=''; return }
     if(!d){ g.innerHTML=FAIL[a]?errBox(a):skel(Math.min(4,urls.length)); miss.hidden=true; return }
     var have=[], lost=[];
     urls.forEach(function(u){ var it=own.call(d.__byUrl,u)?d.__byUrl[u]:null; if(it) have.push(it); else lost.push(u) });
@@ -1637,7 +1639,7 @@ function savedUpdate(gen){
     bindImgs(g);
     miss.hidden=!lost.length;
     miss.innerHTML=lost.map(function(u){ var ok=okUrl(u), host=''; try{ host=new URL(u).host.replace(/^www\./,'') }catch(e){}
-      return '<li><span class="miss-l">Not in today’s list</span><span class="miss-u">'+esc(host)+'</span>'+
+      return '<li lang="en"><span class="miss-l">Not in today’s list</span><span class="miss-u">'+esc(host)+'</span>'+
         (ok?'<a href="'+esc(ok)+'" target="_blank" rel="noopener noreferrer">Listing</a>':'')+
         '<button type="button" class="lnk" data-unsave="'+esc(a)+'" data-u="'+esc(u)+'">Remove</button></li>' }).join('');
   });
@@ -1661,7 +1663,7 @@ function savedUpdate(gen){
           have.sort(function(x,y){ var bx0=bm[skey(x)], by0=bm[skey(y)]; return String((by0&&by0.d)||'').localeCompare(String((bx0&&bx0.d)||'')) || y.k-x.k });
           SAVEDLIST=SAVEDLIST.concat(have);
           body='<div class="grid">'+have.map(function(it,i){ return card(it,{change:true, eager:i<2}) }).join('')+'</div>'+
-            (lost.length?'<ul class="miss">'+lost.map(function(k){ return '<li><span class="miss-l">Not in today’s list</span>'+
+            (lost.length?'<ul class="miss">'+lost.map(function(k){ return '<li lang="en"><span class="miss-l">Not in today’s list</span>'+
               '<button type="button" class="lnk" data-unsave="brx" data-u="'+esc(k)+'">Remove</button></li>' }).join('')+'</ul>':'');
         }
         bh+='<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'" lang="en">'+esc(g.name)+' <span class="n">'+won(ks.length)+'</span></h2>'+body+'</section>';
@@ -1682,7 +1684,7 @@ function aboutShell(){
     AS.map(function(a){ return '<section class="ab-s" aria-labelledby="abh-'+a+'"><h2 id="abh-'+a+'" lang="en">'+esc(ARCH[a].name)+'</h2><dl class="kv" id="ab-'+a+'"><dt>범위</dt><dd>'+esc(ARCH[a].sub)+'</dd><dt>갱신</dt><dd>'+esc(ARCH[a].upd)+'</dd></dl></section>' }).join('')+
     '<section class="ab-s" id="abs-b" aria-labelledby="abh-b" hidden><h2 id="abh-b" lang="en">Brands</h2><dl class="kv" id="ab-b"></dl></section>'+
     '<section class="ab-s" aria-labelledby="abh-r"><h2 id="abh-r">읽는 법</h2><dl class="kv">'+
-      '<dt>연도</dt><dd>상품명에 적힌 것만 <span class="basis">연도 표기 · 시기 표기 · 미확인</span></dd>'+
+      '<dt>연도</dt><dd>상품명에 적힌 것만 <span class="basis">연도 표기 · 아카이브 표기 · 시기 표기 · 연도 미확인</span></dd>'+
       '<dt>가격</dt><dd>판매자 통화와 원화 환산 <span class="basis">그날 환율</span></dd>'+
       '<dt>가격 변동</dt><dd>판매자가 바꾼 가격만 <span class="basis">환율로 움직인 원화는 빼고</span></dd>'+
       '<dt>신규</dt><dd>그날 처음 본 매물 <span class="basis">새로 읽기 시작한 판매처는 첫날 제외</span></dd>'+
@@ -1745,7 +1747,7 @@ function findItem(k){
   if(ST.view==='room'){ var dr=DATA[ST.a]; return dr && own.call(dr.__byKey,k) ? dr.__byKey[k] : null }
   for(var i=0;i<AS.length;i++){ var d=DATA[AS[i]]; if(d && own.call(d.__byKey,k)) return d.__byKey[k] }
   // the brands: New in shows today's new ones (new.json), Saved the brands' own data
-  if(ST.view==='new' && BNEW) for(var a in BNEW.byKey) if(own.call(BNEW.byKey,a) && own.call(BNEW.byKey[a],k)) return BNEW.byKey[a][k];
+  if((ST.view==='new'||ST.view==='home') && BNEW) for(var a in BNEW.byKey) if(own.call(BNEW.byKey,a) && own.call(BNEW.byKey[a],k)) return BNEW.byKey[a][k];
   if(ST.view==='saved'){ var it=null; keys(bSavedBy()).some(function(s){ var x=itemAt('b:'+s,k); if(x && isSaved(x)) it=x; return !!it }); if(it) return it }
   return null;
 }
@@ -1755,7 +1757,7 @@ function syncItem(){
   if(!it){
     // (Saved reads only the archives it has listings from)
     var waiting=(ST.view==='room'?[ST.a]:ST.view==='saved'?AS.filter(function(a){ return keys(SAVED[a]||{}).length }):AS).some(function(a){ return !DATA[a] && !FAIL[a] }) ||
-      (ST.view==='new' && BNEW===null) || (ST.view==='saved' && bSavedPending());
+      ((ST.view==='new'||ST.view==='home') && BNEW===null) || (ST.view==='saved' && bSavedPending());
     if(waiting) return;
     ST.item=null; writeUrl(false); if(DV.it) closeDetail(true); return;
   }
@@ -1818,8 +1820,7 @@ function showDetail(it,fromUi,o){
   dv.innerHTML=html;
   bindImgs(dv); DV.ph=0;
   ov.hidden=false;
-  root.classList.add('lock');
-  inert(true);
+  layers();
   if(o.now){ ov.classList.add('now','open') } else { requestAnimationFrame(function(){ ov.classList.add('open') }); upgrade() }
   var sb=stepF && dv.querySelector('[data-step="'+stepF+'"]:not([disabled])');
   var x=sb || dv.querySelector('.dv-x'); if(x && (!wasOpen || !dv.contains(doc.activeElement))) x.focus({preventScroll:true});
@@ -1835,13 +1836,15 @@ function closeDetail(silent,now){
   ov.classList.remove('open');
   var done=function(){ if(!ov.classList.contains('open')){ ov.hidden=true; $('dv').innerHTML=''; ov.classList.remove('now') } };
   if(REDUCED.matches || now) done(); else setTimeout(done,240);
-  root.classList.remove('lock'); inert(false);
   var it=DV.it, r=DV.ret; DV.it=null; DV.list=null; DV.idx=-1; DV.ret=null;
+  layers();
   // the keyboard goes back to the listing's own card when it is on the page (after stepping, the one last open),
-  // else to where it was, else to the page's heading
+  // else to where it was, else to the page's heading; a card out of sight is brought into it
   var sel='[data-a="'+cssv(it.__a)+'"][data-k="'+cssv(it.__k)+'"]', cur=doc.querySelector('.grid '+sel+' .t a, .ix '+sel+' .r-t a');
   var t=cur || (r && r.focus && r!==doc.body && doc.contains(r) ? r : null) || $('vh');
-  if(t) try{ t.focus({preventScroll:true}) }catch(e){}
+  if(t) try{ t.focus({preventScroll:true});
+    var box=t.closest('.card,.row'), rc=box && box.getBoundingClientRect();
+    if(rc && (rc.bottom<0 || rc.top>innerHeight)) box.scrollIntoView({block:'center'}) }catch(e){}
   title();
 }
 function closeByUser(){
@@ -1860,12 +1863,22 @@ function step(d){
   var pushed=DV.pushed, ret=DV.ret;
   showDetail(n,true); DV.pushed=pushed; DV.ret=ret;
   // the detail is drawn again; one quiet line says where it is now
-  if(DV.it===n) live(won(DV.idx+1)+' / '+won(DV.list.length)+' · '+clip(n.t,80));
+  if(DV.it===n) live('',won(DV.idx+1)+' / '+won(DV.list.length)+' <span'+tl(n)+'>'+esc(clip(n.t,80))+'</span>');
 }
-// what lies under an open layer is out of reach: the skip link too
-function inert(on){
-  [$('top'),$('main'),$('foot'),$('drawer'),doc.querySelector('.skip')].forEach(function(el){ if(!el) return;
-    if(on){ el.setAttribute('inert',''); el.setAttribute('aria-hidden','true') } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden') } });
+// What sits on top decides what is out of reach — the listing, the search, the phone menu, the filter drawer — and
+// one place sets it from what is open now (inert, aria-hidden where inert is not known, the page's scroll lock), so
+// closing one layer never frees what another still covers. The skip link is out of reach with the rest.
+var LAYER={search:false, menu:false, side:false};
+function layers(){
+  var q=function(s){ return doc.querySelector(s) }, top=!!DV.it||LAYER.search, set=[];
+  var every=[$('top'),$('main'),$('foot'),$('drawer'),q('.skip'),q('#main > .rh'),$('cats'),$('bar'),q('#main > .body')];
+  if(top) set=[$('top'),$('main'),$('foot'),$('drawer'),q('.skip')];
+  else if(LAYER.menu) set=[$('top'),$('main'),$('foot'),q('.skip')];
+  else if(LAYER.side) set=[$('top'),$('foot'),q('.skip'),q('#main > .rh'),$('cats'),$('bar'),q('#main > .body')];
+  every.forEach(function(el){ if(!el) return;
+    if(set.indexOf(el)>=0){ el.setAttribute('inert',''); el.setAttribute('aria-hidden','true') } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden') } });
+  root.classList.toggle('lock', top||LAYER.menu);
+  root.classList.toggle('lock-side', LAYER.side && !top);
 }
 // the year, in the words the card uses (연도 미확인: no year confirmed), and on what it rests
 function yearLine(it){
@@ -1985,8 +1998,7 @@ function openSearch(){
   var s=$('search'); if(!s.hidden) { $('sq').focus(); return }
   closeDrawer(true); var sd=$('side'); if(sd && sd.classList.contains('open')) sideOpen(false);
   SOPEN=doc.activeElement;
-  s.hidden=false; root.classList.add('lock'); requestAnimationFrame(function(){ s.classList.add('open') });
-  inert(true);
+  s.hidden=false; LAYER.search=true; layers(); requestAnimationFrame(function(){ s.classList.add('open') });
   $('searchBtn').setAttribute('aria-expanded','true');
   var q=$('sq'); q.value=ST.view==='room'?ST.F.q:''; q.focus(); q.select();
   AS.forEach(function(a){ if(!DATA[a] && !FAIL[a]) load(a).then(runSearch,function(){ runSearch() }) });
@@ -2002,7 +2014,7 @@ function hints(){
 }
 function closeSearch(silent){
   var s=$('search'); if(s.hidden) return;
-  s.classList.remove('open'); root.classList.remove('lock'); inert(false);
+  s.classList.remove('open'); LAYER.search=false; layers();
   $('searchBtn').setAttribute('aria-expanded','false');
   var fin=function(){ if(!s.classList.contains('open')) s.hidden=true };
   if(REDUCED.matches) fin(); else setTimeout(fin,200);
@@ -2044,7 +2056,7 @@ function brandHitsHtml(L){
   return '<section class="sr-g sr-bg"><h3 lang="en">Brands <span class="n">'+won(L.length)+'</span></h3><ul>'+L.slice(0,6).map(function(r){ var x=r.x;
     var ph=x.ph || (DATA[x.a] ? (heroPick(x.a,DATA[x.a],'search')||{}).i : '');
     var href=x.href+(r.rest?'&q='+encodeURIComponent(r.rest):'');
-    return '<li><a class="sr-i sr-bi" href="'+esc(href)+'"><span class="sr-ph">'+imgTag(x.a,ph,160)+'</span><span class="sr-t" lang="en">'+esc(x.name)+'</span>'+
+    return '<li><a class="sr-i sr-bi" href="'+esc(href)+'" data-sc="'+r.sc+'"><span class="sr-ph">'+imgTag(x.a,ph,160)+'</span><span class="sr-t" lang="en">'+esc(x.name)+'</span>'+
       '<span class="sr-p">'+(r.rest?'“'+esc(r.rest)+'”':x.n?'<span lang="en">'+won(x.n)+' '+(x.n===1?'Item':'Items')+'</span>':'')+'</span></a></li>' }).join('')+'</ul></section>';
 }
 function runSearch(){
@@ -2083,8 +2095,9 @@ $('sq').addEventListener('input',function(){ clearTimeout(SQT); SQT=setTimeout(r
 $('sq').addEventListener('keydown',function(e){
   var items=$('sres').querySelectorAll('a.sr-i, a.sr-all');
   if(e.key==='ArrowDown' || e.key==='ArrowUp'){ if(!items.length) return; e.preventDefault(); SSEL=(SSEL+(e.key==='ArrowDown'?1:-1)+items.length)%items.length; items[SSEL].focus(); return }
-  // Enter: the first answer — a brand when a brand answers, else the first archive's whole list
-  if(e.key==='Enter'){ var first=$('sres').querySelector('a.sr-bi')||$('sres').querySelector('a.sr-all'); if(first){ e.preventDefault(); first.click() } }
+  // Enter: a brand whose name the query is or begins with; else the first archive's whole list; else the first brand
+  if(e.key==='Enter'){ var bi=$('sres').querySelector('a.sr-bi'), sc=bi?+bi.getAttribute('data-sc'):0;
+    var first=(sc>=3?bi:null)||$('sres').querySelector('a.sr-all')||bi; if(first){ e.preventDefault(); first.click() } }
 });
 $('sres').addEventListener('keydown',function(e){
   if(e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
@@ -2097,11 +2110,8 @@ $('search').addEventListener('click',function(e){
 });
 
 /* ---------------------------------------------------------------- drawer (phone menu) */
-// (the page behind the menu is out of reach while it is open)
-function menuInert(on){ [$('top'),$('main'),$('foot'),doc.querySelector('.skip')].forEach(function(el){ if(!el) return;
-  if(on){ el.setAttribute('inert',''); el.setAttribute('aria-hidden','true') } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden') } }) }
-function openDrawer(){ var d=$('drawer'); d.hidden=false; root.classList.add('lock'); menuInert(true); nextFrame(function(){ d.classList.add('open') }); $('menuBtn').setAttribute('aria-expanded','true'); var x=d.querySelector('[data-close]'); if(x) x.focus() }
-function closeDrawer(silent){ var d=$('drawer'); if(d.hidden) return; d.classList.remove('open'); root.classList.remove('lock'); menuInert(false); $('menuBtn').setAttribute('aria-expanded','false');
+function openDrawer(){ var d=$('drawer'); d.hidden=false; LAYER.menu=true; layers(); nextFrame(function(){ d.classList.add('open') }); $('menuBtn').setAttribute('aria-expanded','true'); var x=d.querySelector('[data-close]'); if(x) x.focus() }
+function closeDrawer(silent){ var d=$('drawer'); if(d.hidden) return; d.classList.remove('open'); LAYER.menu=false; layers(); $('menuBtn').setAttribute('aria-expanded','false');
   var fin=function(){ if(!d.classList.contains('open')) d.hidden=true }; if(REDUCED.matches) fin(); else setTimeout(fin,360); if(!silent) $('menuBtn').focus() }
 $('menuBtn').addEventListener('click',openDrawer);
 (function(){ var ar=$('arch'); if(!ar) return;
@@ -2238,7 +2248,8 @@ ST=readUrl(location.search);
 if(ST.view!=='room') writeUrl(false);
 if(ST.view==='home'){ AS.forEach(function(a){ load(a).catch(function(){}) }) }
 // a brand room opened by its address asks for its own file now, beside the brand index, not after it
-if(ST.view==='room' && isB(ST.a)){ var ea=ST.a; EARLY[ea]=getJSON('/BRAND/b/'+slugOf(ea)+'.json'); EARLY[ea].catch(function(){}); bengine().catch(function(){}) }
+if(ST.view==='room' && isB(ST.a)){ var ea=ST.a, ec=window.AbortController?new AbortController():null; EARLYC[ea]=ec;
+  EARLY[ea]=getJSON('/BRAND/b/'+slugOf(ea)+'.json',{signal:ec&&ec.signal}); EARLY[ea].catch(function(){}); bengine().catch(function(){}) }
 route(null);   // mount, update, open the listing in the address — a brand room once the brand index is here
 bidx();        // the brand index, small
 // From an archive's room, the other archive's page is asked for quietly (low priority, into the browser's cache) once the

@@ -219,6 +219,54 @@ const json = (rt, body) => rt.fulfill({ status: 200, contentType: 'application/j
     ok(p.errs.length === 0, 'large brand: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
 
+  // ---------------------------------------------------------------- after the review of v6
+  { console.log('review'); const p = await H.page(b, { width: 1440, height: 900 });
+    // the front page's New today holds brand listings: one opened there has an address that opens it again
+    await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 600);
+    const firstRow = await p.evaluate(() => [...document.querySelectorAll('#tgrid .card')].slice(0, 4).map((c) => c.dataset.a));
+    ok(firstRow.some((a) => /^b:/.test(a)) && firstRow.includes('hl'), 'New today: each source in the first row ' + firstRow.join());
+    await p.click('#tgrid .card[data-a^="b:"] .t a'); await wait(p, 500);
+    const q1 = await qs(p), t1 = await p.$eval('#dvT', (h) => h.textContent);
+    await p.reload(); await H.ready(p); await wait(p, 800);
+    ok(/^\?item=/.test(q1) && (await qs(p)) === q1 && await p.evaluate(() => !document.getElementById('ov').hidden) && await p.$eval('#dvT', (h) => h.textContent) === t1, 'a brand listing from the front page reopens from its address ' + q1);
+    await p.keyboard.press('Escape'); await wait(p, 400);
+    // back into an open listing across a change of filter: the list it steps through is the one in the address
+    await p.goto(H.BASE + '/?archive=hl&motif=bondage&sort=k%2B'); await H.ready(p); await wait(p, 300);
+    await p.click('#grid .card:nth-child(5) .t a'); await wait(p, 500);
+    const pos0 = await p.$eval('.dv-pos', (e) => e.textContent);
+    await p.click('.dv-info .tag[data-motif="bondage"]'); await wait(p, 900);
+    await p.goBack(); await wait(p, 900);
+    const pos1 = await p.evaluate(() => (document.querySelector('.dv-pos') || {}).textContent);
+    ok(/^5 \//.test(pos0) && pos1 === pos0, 'Back into the open listing: the same place in the same list ' + pos0 + ' → ' + pos1);
+    await p.keyboard.press('ArrowRight'); await wait(p, 300);
+    ok(/^6 \//.test(await p.$eval('.dv-pos', (e) => e.textContent)), 'and Next goes on from there');
+    await p.keyboard.press('Escape'); await wait(p, 400);
+    // the drawer's count speaks while the bar behind it is inert
+    ok(await p.evaluate(() => { const n = document.getElementById('sideN'); return n.getAttribute('role') === 'status' && n.getAttribute('aria-live') === 'polite' }), 'the drawer has its own status line');
+    // Enter: a brand by name; a word that is no brand's name goes to the listings
+    await p.keyboard.press('/'); await p.fill('#sq', 'leather'); await wait(p, 500); await p.keyboard.press('Enter'); await wait(p, 900);
+    ok(/archive=hl/.test(await qs(p)) && /q=leather/.test(await qs(p)), 'Enter on a plain word: the listings ' + await qs(p));
+    ok(p.errs.length === 0, 'review: no errors ' + p.errs.join(' | '));
+    await p.context().close(); }
+  // Saved: removing the last missing row of an archive keeps the keyboard on the page
+  { console.log('saved remove'); const p = await H.page(b, { width: 1280, height: 900 }, { storage: { 'hlx.saved': JSON.stringify({ 'https://example.com/gone-1': { k: 1, p: 1, u: '', d: '2026-10-18', g: 0 } }) } });
+    await p.goto(H.BASE + '/?view=saved'); await H.ready(p); await wait(p, 500);
+    await p.focus('#sgm-hl [data-unsave]'); await p.keyboard.press('Enter'); await wait(p, 400);
+    ok(await p.evaluate(() => document.activeElement !== document.body && document.activeElement.getClientRects().length > 0 && !document.querySelector('#sgm-hl li')), 'the focus lands on something visible: ' + await p.evaluate(() => document.activeElement.id || document.activeElement.tagName));
+    ok(p.errs.length === 0, 'saved remove: no errors ' + p.errs.join(' | '));
+    await p.context().close(); }
+  // the brand index down: leaving the could-not-load page and coming back leaves no lock or inert behind
+  { console.log('down and back'); const srv = await H.serve({ FAIL: 'brand' }); const p = await H.page(b, { width: 1280, height: 900 });
+    try {
+      await p.goto(srv.base + '/?brand=guidi'); await H.ready(p); await wait(p, 2500);
+      await p.click('.arch a[data-nav="hl"]'); await wait(p, 900); await H.ready(p);
+      await p.click('#ftog'); await wait(p, 500);
+      await p.goBack(); await wait(p, 900);
+      const r = await p.evaluate(() => ({ lock: document.documentElement.className, inert: ['top', 'foot', 'main'].filter((id) => document.getElementById(id).hasAttribute('inert')), q: location.search }));
+      ok(!/lock/.test(r.lock) && r.inert.length === 0 && r.q === '?brand=guidi', 'back on the could-not-load page: nothing locked or inert ' + JSON.stringify(r));
+      ok(p.errs.length === 0, 'down and back: no errors ' + p.errs.join(' | '));
+    } finally { await p.context().close(); srv.close() } }
+
   // ---------------------------------------------------------------- a phone: tabs, the brand line, the brands row
   { console.log('phone'); const p = await H.page(b, { width: 360, height: 780 }, { mobile: true, dpr: 2 });
     await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 600);
