@@ -16,10 +16,10 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
       tags: document.querySelectorAll('#tgrid .at').length, shown: [...document.querySelectorAll('#tgrid .card')].filter((c) => c.offsetParent).length,
       cols: getComputedStyle(document.getElementById('tgrid')).gridTemplateColumns.split(' ').length, mos: document.querySelectorAll('.room-ph img').length,
       rooms: [...document.querySelectorAll('.rooms .room')].map((a) => a.getAttribute('href')) }));
-    ok(r.st.every((t) => /매물/.test(t)), 'home: both rooms have stats ' + JSON.stringify(r.st));
+    ok(r.st.every((t) => /Items/i.test(t)), 'home: both rooms have stats ' + JSON.stringify(r.st));
     ok(r.today > 0 && r.tags === r.today, 'home: today grid with archive tags ' + r.today + '/' + r.tags);
     ok(r.shown > 0 && r.shown % r.cols === 0 || r.shown === r.today, 'home: today shows whole rows ' + r.shown + ' in ' + r.cols + ' columns');
-    ok(r.mos === 6, 'home: three photographs for each archive ' + r.mos);
+    ok(r.mos === 2, 'home: one photograph behind each archive ' + r.mos);
     ok(r.rooms.join() === '/?archive=hl,/?archive=ccp', 'home: the two archives link to their rooms ' + r.rooms.join());
     await p.click('.room.r-ccp'); await wait(p, 700);
     ok((await qs(p)) === '?archive=ccp', 'home → ccp room url ' + (await qs(p)));
@@ -42,12 +42,16 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     // certainty facet sums to the count shown
     const certSum = await p.evaluate(() => [...document.querySelectorAll('#f-cert .op-n')].reduce((a, e) => a + +e.textContent.replace(/,/g, ''), 0));
     ok(certSum === tabN, 'cert facet sums to view ' + certSum + ' vs ' + tabN);
+    await p.click('#ftog'); await wait(p, 450);
+    ok(await p.evaluate(() => document.getElementById('side').classList.contains('open') && document.documentElement.classList.contains('lock-side')), 'filter drawer opens on a wide screen');
     await p.click('#f-y [data-v="1998"]'); await wait(p, 250);
     await p.click('#f-y [data-v="1999"]'); await wait(p, 250);
     ok((await qs(p)) === '?archive=hl&category=outer&year=1998-1999', 'years packed ' + (await qs(p)));
     const tok = await p.evaluate(() => [...document.querySelectorAll('#applied .tok')].map((t) => t.textContent));
     ok(tok.some((t) => /1998–1999/.test(t)), 'range token ' + tok.join(','));
     const n2 = await count(p);
+    await p.click('#sideDone'); await wait(p, 450);
+    ok(await p.evaluate(() => !document.getElementById('side').classList.contains('open') && !document.documentElement.classList.contains('lock-side')), 'drawer closes');
     await p.click('#applied .tok[data-off="y"]'); await wait(p, 250);
     ok((await qs(p)) === '?archive=hl&category=outer', 'range token removes both years ' + (await qs(p)));
     await p.goBack(); await wait(p, 300);
@@ -111,11 +115,14 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     ok(n.drip > 0 && n.drip === n['ドリップ'] && n.drip === n['드립'], 'three languages ' + JSON.stringify(n));
     await p.fill('#rq', ''); await wait(p, 400);
     const live = await count(p);
+    await p.click('#ftog'); await wait(p, 450);
     await p.click('#f-flag [data-v="sold"]'); await wait(p, 300);
     const sold = await count(p), recs = await p.evaluate(() => document.querySelectorAll('#grid .card.rec').length);
     ok(sold > 0 && recs === Math.min(sold, 60), 'sale records only ' + sold + '/' + recs);
     await p.click('#f-flag [data-v="sold"]'); await wait(p, 300);
     ok(await count(p) === live, 'sale records off again');
+    await p.keyboard.press('Escape'); await wait(p, 450);
+    ok(await p.evaluate(() => !document.getElementById('side').classList.contains('open') && document.activeElement.id === 'ftog'), 'escape closes the drawer, focus back on its button');
     const code = await p.evaluate(() => { const m = document.querySelector('#grid .sub .mc'); return m ? m.textContent : null });
     if (code) { await p.fill('#rq', code.toLowerCase()); await wait(p, 400); ok(await count(p) > 0, 'model number search ' + code) }
     ok(p.errs.length === 0, 'ccp: no errors ' + p.errs.join(' | '));
@@ -136,7 +143,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     await p.keyboard.press('Escape'); await wait(p, 450);
     ok(/q=leather/.test(await qs(p)) && !/item=/.test(await qs(p)), 'closing leaves the search ' + (await qs(p)));
     await p.keyboard.press('/'); await p.fill('#sq', 'helmut lang'); await wait(p, 400);
-    ok(await p.evaluate(() => /브랜드 이름은 검색어로 쓰지 않음/.test(document.getElementById('sres').textContent)), 'brand-only query explained');
+    ok(await p.evaluate(() => /Brand names are not search terms/.test(document.getElementById('sres').textContent)), 'brand-only query explained');
     await p.keyboard.press('Escape'); await wait(p, 300);
     ok(await p.evaluate(() => document.getElementById('search').hidden && document.activeElement.id === 'searchBtn'), 'escape closes search, focus back');
     ok(p.errs.length === 0, 'search: no errors ' + p.errs.join(' | '));
@@ -154,7 +161,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     await p.click('#f-cert [data-v="A"]'); await wait(p, 300);
     const lbl = await p.$eval('#sideDone', (x) => x.textContent);
     await p.click('#sideDone'); await wait(p, 300);
-    ok(!await p.evaluate(() => document.getElementById('side').classList.contains('open')) && /건 보기/.test(lbl), 'sheet closes ' + lbl);
+    ok(!await p.evaluate(() => document.getElementById('side').classList.contains('open')) && /^Show [\d,]+ items?$/i.test(lbl), 'sheet closes ' + lbl);
     ok((await qs(p)) === '?archive=ccp&year-basis=confirmed', 'cert url ' + (await qs(p)));
     for (const w of [360, 390, 430]) { await p.setViewportSize({ width: w, height: 800 }); await wait(p, 200); const o = await H.overflow(p); ok(o.sw <= o.w, 'no overflow at ' + w + ' ' + JSON.stringify(o)) }
     await p.click('#grid .card .ph'); await wait(p, 400);
@@ -208,7 +215,7 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     await p.click('.dv-nav [data-step="-1"]'); await wait(p, 300);
     ok(/^2 \//.test(await p.$eval('.dv-pos', (e) => e.textContent)), 'previous button');
     await p.click('[data-copy]'); await wait(p, 300);
-    ok(/링크 복사함|복사할 수 없음/.test(await p.$eval('#toast', (t) => t.textContent)), 'copy says what happened: ' + await p.$eval('#toast', (t) => t.textContent));
+    ok(/Link copied|Could not copy/.test(await p.$eval('#toast', (t) => t.textContent)), 'copy says what happened: ' + await p.$eval('#toast', (t) => t.textContent));
     const tag = await p.$('.dv-info .tag');
     if (tag) { const lbl = await tag.textContent(); await tag.click(); await wait(p, 900);
       ok(/motif=/.test(await qs(p)) && await p.evaluate(() => document.getElementById('ov').hidden), 'motif tag filters the room: ' + lbl + ' ' + (await qs(p))) }
@@ -218,6 +225,31 @@ async function cards(p) { return p.evaluate(() => document.querySelectorAll('#gr
     ok(p.errs.length === 0, 'place: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
 
+
+  // ---------------------------------------------------------------- new in, brands, sort in the drawer
+  { console.log('new in, brands'); const p = await H.page(b, { width: 1440, height: 900 });
+    await p.goto(H.BASE + '/?view=new'); await H.ready(p); await wait(p, 400);
+    const n = await p.evaluate(() => ({ cards: document.querySelectorAll('#ngrid .card').length, tabs: [...document.querySelectorAll('#newT .tab')].map((t) => t.textContent),
+      cur: document.querySelector('.arch a[aria-current="page"]') && document.querySelector('.arch a[aria-current="page"]').getAttribute('data-nav') }));
+    ok(n.cards > 0 && n.tabs.length === 3 && n.cur === 'new', 'new in lists today\'s listings ' + JSON.stringify(n));
+    await p.click('#newT [data-nt="ccp"]'); await wait(p, 300);
+    ok(await p.evaluate(() => [...document.querySelectorAll('#ngrid .card')].every((c) => c.dataset.a === 'ccp')), 'new in: one archive');
+    await p.click('#ngrid .card .t a'); await wait(p, 500);
+    ok(await p.evaluate(() => !document.getElementById('ov').hidden && /view=new&item=/.test(location.search)), 'new in: a listing opens ' + await qs(p));
+    await p.keyboard.press('Escape'); await wait(p, 450);
+    await p.goto(H.BASE + '/?view=brands'); await H.ready(p); await wait(p, 400);
+    const z = await p.evaluate(() => ({ names: [...document.querySelectorAll('.az-s a')].map((a) => a.getAttribute('href') + ' ' + a.textContent), letters: [...document.querySelectorAll('.az-l a')].map((a) => a.textContent).join('') }));
+    ok(z.letters === 'CH' && z.names.length === 2 && z.names.every((x) => /^\/\?archive=(hl|ccp) .*\d/.test(x)), 'brands A to Z ' + JSON.stringify(z));
+    await p.click('.az-l a[data-az="H"]'); await wait(p, 300);
+    ok(await p.evaluate(() => location.hash === '' && document.activeElement && document.activeElement.id === 'azh-H'), 'letter jumps without a hash');
+    await p.goto(H.BASE + '/?archive=hl'); await H.ready(p); await wait(p, 300);
+    await p.click('#ftog'); await wait(p, 450);
+    await p.click('#f-sort [data-sort="k-"]'); await wait(p, 300);
+    ok((await qs(p)) === '?archive=hl&sort=k-' && await p.$eval('#sort', (s) => s.value) === 'k-' && await p.evaluate(() => document.querySelector('#f-sort [data-sort="k-"]').getAttribute('aria-pressed') === 'true'), 'sort from the drawer ' + (await qs(p)));
+    await p.click('#sideShade', { position: { x: 1300, y: 400 } }); await wait(p, 450);
+    ok(await p.evaluate(() => !document.getElementById('side').classList.contains('open')), 'the shade closes the drawer');
+    ok(p.errs.length === 0, 'new/brands: no errors ' + p.errs.join(' | '));
+    await p.context().close(); }
   console.log('\n' + pass + ' passed, ' + fails.length + ' failed');
   await b.close();
 })();

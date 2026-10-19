@@ -21,7 +21,7 @@ function keys(o){ var a=[],k; for(k in o) if(own.call(o,k)&&o[k]) a.push(k); ret
 function any(o){ for(var k in o) if(own.call(o,k)&&o[k]) return true; return false }
 function dec(s){ s=String(s==null?'':s); try{ return decodeURIComponent(s) }catch(e){ return s } }
 function mq(q){ return window.matchMedia ? matchMedia(q) : {matches:false} }
-var REDUCED=mq('(prefers-reduced-motion: reduce)'), WIDE=mq('(min-width:1280px)');
+var REDUCED=mq('(prefers-reduced-motion: reduce)');
 function md(d){ var m=/^\d{4}-(\d{2})-(\d{2})/.exec(d||''); return m?(+m[1])+'/'+(+m[2]):'' }
 function kday(d){ var m=/^\d{4}-(\d{2})-(\d{2})/.exec(d||''); return m?(+m[1])+'월 '+(+m[2])+'일':'' }
 var KST=null; try{ KST=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) }catch(e){}
@@ -45,16 +45,45 @@ doc.addEventListener('pointerover',function(e){
   im.src=okUrl(thumb(it.__a,u,600))||u; ph.appendChild(im);
 },{passive:true});
 
-if(!P.hl || !P.ccp){ var m0=$('main'); if(m0) m0.innerHTML='<div class="fatal"><p>불러오지 못함</p><p><a href="/helmut-lang/">Helmut Lang</a> · <a href="/ccp/">Carol Christian Poell</a></p></div>'; return }
+if(!P.hl || !P.ccp){ var m0=$('main'); if(m0) m0.innerHTML='<div class="fatal"><p>Could not load</p><p><a href="/helmut-lang/">Helmut Lang</a> · <a href="/ccp/">Carol Christian Poell</a></p></div>'; return }
 
 /* ---------------------------------------------------------------- archives */
 var ARCH={
   hl: {a:'hl', no:'01', name:'Helmut Lang', short:'Helmut Lang', path:'/helmut-lang/', sk:'hlx.saved', vk:'aix.visit.hl',
-       ph:'품목·연도·모델', span:'1986–2005', upd:'매일 09:00', sub:'1986–2005'},
+       ph:'Item · year · model', span:'1986–2005', upd:'매일 09:00', sub:'1986–2005'},
   ccp:{a:'ccp', no:'02', name:'Carol Christian Poell', short:'CCP', path:'/ccp/', sk:'ccpx.saved', vk:'aix.visit.ccp',
-       ph:'품목·연도·번호', span:'전 시즌', upd:'매일 07:17', sub:'전 시즌'}
+       ph:'Item · year · number', span:'All seasons', upd:'매일', sub:'전 시즌'}
 };
 var AS=['hl','ccp'];
+
+/* ---------------------------------------------------------------- words on screen
+   Menus, filters, buttons and counts are English (set in capitals by the stylesheet); what a listing
+   says about itself — year basis, source, customs, dates — stays in Korean, as the archives write it.
+   The archives' own values (categories, motifs) are only shown in other words here: addresses keep them. */
+var CATEN={'아우터':'Outerwear','데님':'Denim','팬츠':'Trousers','상의':'Tops','테일러링':'Tailoring','신발':'Footwear',
+  '가방·액세서리':'Bags & accessories','가방·소품':'Bags & small goods','셔츠':'Shirts','주얼리':'Jewellery','기타':'Other'};
+var MOTIFEN={bondage:'Bondage',astro:'Astro',flak:'M69 flak',bullet:'Bulletproof',painter:'Painter',parachute:'Parachute',taxi:'Taxi',
+  harness:'Harness · holster',seatbelt:'Seatbelt',biker:'Biker',aviator:'Aviator',ma1:'MA-1',kite:'Kite',mohawk:'Mohawk',
+  reflective:'Reflective',resin:'Resin · rubber',sample:'Sample · runway',deadstock:'Deadstock',
+  drip:'Drip',objectdyed:'Object dyed',overlock:'Overlock',deadend:'Dead end',chainseam:'Chain seam',scarstitch:'Scar stitch',
+  seamless:'Seamless',reversible:'Reversible',spiral:'Spiral',inbetween:'In between',prosthetic:'Prosthetic',tornado:'Tornado',
+  diagonalzip:'Diagonal zip',usole:'U-sole',paperdart:'Paper dart',goodyear:'Goodyear',officer:'Officer',highneck:'High neck',vestbag:'Vest bag'};
+var MARKEN={italy:'Made in Italy',austria:'Made in Austria',usa:'Made in USA',japan:'Made in Japan',portugal:'Made in Portugal',
+  jeans:'Helmut Lang Jeans',mainline:'Mainline',kangaroo:'Kangaroo',horse:'Horse',cordovan:'Cordovan',bison:'Bison',titanium:'Titanium','new':'New · unworn'};
+var FLAGEN={'new':'New','drop':'Price drop','multi':'Multi-listed','saved':'Saved','gone':'Delisted','since':'Since last visit','sold':'Sold records'};
+function catEn(c){ return own.call(CATEN,c)?CATEN[c]:c }
+function motifEn(a,m){ return own.call(MOTIFEN,m)?MOTIFEN[m]:P[a].motifLbl(m) }
+function markEn(a,m){ return own.call(MARKEN,m)?MARKEN[m]:(P[a].MARKLBL[m]||m) }
+function grpEn(a,g){ return g==='y'?'Year':g==='cert'?'Year basis':g==='motif'?(a==='ccp'?'Technique · model':'Motif'):g==='src'?'Source':
+  g==='price'?'Price':g==='mark'?(a==='ccp'?'Material · mark':'Origin · line'):g==='flag'?'Status':g }
+// the archive's price bands written as figures: ~30만 → under ₩300K
+function kfig(v){ return v>=1e6?String(v/1e6)+'M':Math.round(v/1e3)+'K' }
+function priceEn(a,b){ var r=null; P[a].PRICE.forEach(function(x){ if(x[0]===b) r=x }); if(!r) return b;
+  if(!(r[1]>0)) return 'Under ₩'+kfig(r[2]);
+  if(!(r[2]<Infinity)) return '₩'+kfig(r[1])+' and up';
+  return '₩'+kfig(r[1])+'–'+kfig(r[2]) }
+var MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function enDay(d){ var m=/^\d{4}-(\d{2})-(\d{2})/.exec(d||''); return m?MON[+m[1]-1]+' '+(+m[2]):'' }
 
 /* ---------------------------------------------------------------- loading */
 var busyN=0;
@@ -159,9 +188,9 @@ function ackSaved(it){
 function toggleSave(it){
   var a=it.__a, m=readSaved(a);
   if(m[it.l]) delete m[it.l]; else m[it.l]=keepMark(it);
-  if(!lsSet(ARCH[a].sk,JSON.stringify(m))){ toast('이 브라우저에는 저장할 수 없음'); return }
+  if(!lsSet(ARCH[a].sk,JSON.stringify(m))){ toast('This browser cannot save'); return }
   SAVED[a]=m; savedUi(); marks(it);
-  toast(m[it.l]?'저장함':'저장 해제');
+  toast(m[it.l]?'Saved':'Removed');
   if(ST.view==='saved' || (ST.view==='room' && ST.F.flag.saved)){ LASTQ=null; update() }
 }
 function marks(it){
@@ -169,13 +198,15 @@ function marks(it){
   var bs=doc.querySelectorAll(sel);
   for(var i=0;i<bs.length;i++){
     bs[i].setAttribute('aria-pressed',String(on)); bs[i].classList.toggle('on',on);
-    if(bs[i].classList.contains('btn')) bs[i].textContent=on?'저장 해제':'저장';
+    if(bs[i].classList.contains('btn')) bs[i].innerHTML=saveBtnInner(on);
     else if(on && fxOn()){ bs[i].classList.remove('pop'); void bs[i].offsetWidth; bs[i].classList.add('pop') }
   }
 }
+var HEART='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3s-7.6-4.6-7.6-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.6 2.7c0 5.6-7.6 10.2-7.6 10.2z"/></svg>';
+function saveBtnInner(on){ return '<i class="hrt">'+HEART+'</i><span>'+(on?'Saved':'Save')+'</span>' }
 function savedUi(){
   var n=savedN(), s=$('savedN'); if(s) s.textContent=n?won(n):'';
-  var sl=$('savedLink'); if(sl) sl.setAttribute('aria-label',n?'저장 '+won(n)+'건':'저장');
+  var sl=$('savedLink'); if(sl) sl.setAttribute('aria-label',n?'Saved, '+won(n):'Saved');
   var dm=$('dmSaved'); if(dm) dm.textContent=n?won(n):'';
 }
 window.addEventListener('storage',function(e){
@@ -183,15 +214,15 @@ window.addEventListener('storage',function(e){
     reloadSaved(); savedUi();
     var bs=doc.querySelectorAll('[data-save]');
     for(var i=0;i<bs.length;i++){ var it=itemOfEl(bs[i]); if(it){ var on=isSaved(it); bs[i].classList.toggle('on',on); bs[i].setAttribute('aria-pressed',String(on));
-      if(bs[i].classList.contains('btn')) bs[i].textContent=on?'저장 해제':'저장' } }
+      if(bs[i].classList.contains('btn')) bs[i].innerHTML=saveBtnInner(on) } }
     if(ST.view==='saved'){ LASTQ=null; update() }
   }
 });
 
 /* ---------------------------------------------------------------- state and address */
 function blankF(){ return {y:{},cat:{},motif:{},price:{},src:{},cert:{},mark:{},flag:{},size:'',q:''} }
-var SORT=[['new','신규 순'],['k-','가격 높은 순'],['k+','가격 낮은 순'],['y+','연도 오래된 순'],['y-','연도 최신 순'],
-          ['drop','가격 내린 순'],['age','오래 남은 순'],['rel','관련도 순']];
+var SORT=[['new','Newest'],['k-','Price high to low'],['k+','Price low to high'],['y+','Year old to new'],['y-','Year new to old'],
+          ['drop','Biggest price drop'],['age','Longest listed'],['rel','Relevance']];
 var SORTV=SORT.map(function(s){ return s[0] });
 var FLAGS=['new','drop','multi','saved','since','gone','sold'];
 var ORG=['cat','y','motif','price','src','cert','mark'];
@@ -229,7 +260,7 @@ function readUrl(search){
   var q=params(search), s={view:'home', a:null, F:blankF(), sort:'new', item:null};
   var a=formVal(q.archive).trim().toLowerCase(), v=formVal(q.view).trim().toLowerCase();
   if(a==='hl' || a==='ccp'){ s.view='room'; s.a=a }
-  if(v==='saved' || v==='about'){ s.view=v; s.a=null }
+  if(v==='saved' || v==='about' || v==='new' || v==='brands'){ s.view=v; s.a=null }
   if(s.view==='room'){
     var p=P[s.a], F=s.F;
     listOf(q.category).forEach(function(x){ F.cat[unslug(p.CATSLUG,x)]=1 });
@@ -267,7 +298,7 @@ function tidy(st){
 function qsOf(st, origin){
   var p=[], enc=function(a){ return a.map(function(x){ return encodeURIComponent(x) }).join(',') };
   if(!origin){
-    if(st.view==='saved' || st.view==='about') p.push('view='+st.view);
+    if(st.view==='saved' || st.view==='about' || st.view==='new' || st.view==='brands') p.push('view='+st.view);
     if(st.view==='room') p.push('archive='+st.a);
   }
   if(st.view==='room'){
@@ -330,13 +361,15 @@ function setRoom(r){ root.setAttribute('data-room',r) }
 function title(){
   var t='Archive Index';
   if(ST.view==='room') t=ARCH[ST.a].name+' — '+t;
-  else if(ST.view==='saved') t='저장 — '+t;
-  else if(ST.view==='about') t='소개 — '+t;
+  else if(ST.view==='saved') t='Saved — '+t;
+  else if(ST.view==='about') t='About — '+t;
+  else if(ST.view==='new') t='New in — '+t;
+  else if(ST.view==='brands') t='Brands — '+t;
   else t='Archive Index — Helmut Lang · Carol Christian Poell';
   if(DV.it) t=clip(DV.it.t,60)+' — '+ARCH[DV.it.__a].name;
   doc.title=t;
   // one canonical address per view (filters and the open listing are not separate pages)
-  var c=doc.querySelector('link[rel="canonical"]'), q=ST.view==='room'?'?archive='+ST.a:ST.view==='about'?'?view=about':ST.view==='saved'?'?view=saved':'';
+  var c=doc.querySelector('link[rel="canonical"]'), q=ST.view==='room'?'?archive='+ST.a:ST.view!=='home'?'?view='+ST.view:'';
   if(c) c.setAttribute('href','https://rozykuzy.github.io/'+q);
   var md0=doc.querySelector('meta[name="description"]'), d=ST.view==='room'?DATA[ST.a]:null;
   if(md0 && ST.view==='room') md0.setAttribute('content',ARCH[ST.a].name+' '+ARCH[ST.a].span+' 중고 매물'+(d?' '+won(d.__cards)+'건':'')+' · 매일 갱신 · 판매자 통화와 원화 환산가');
@@ -357,6 +390,8 @@ function mount(){
   if(ST.view==='room') m.innerHTML=roomShell(ST.a);
   else if(ST.view==='saved') m.innerHTML=savedShell();
   else if(ST.view==='about') m.innerHTML=aboutShell();
+  else if(ST.view==='new') m.innerHTML=newShell();
+  else if(ST.view==='brands') m.innerHTML=brandsShell();
   else m.innerHTML=homeShell();
   if(ST.view==='room') bindRoom();
   navUi(); title();
@@ -366,6 +401,8 @@ function update(){
   if(ST.view==='room') return roomUpdate(gen);
   if(ST.view==='saved') return savedUpdate(gen);
   if(ST.view==='about') return aboutUpdate(gen);
+  if(ST.view==='new') return newUpdate(gen);
+  if(ST.view==='brands') return brandsUpdate(gen);
   return homeUpdate(gen);
 }
 function refresh(){ LASTQ=null; update() }
@@ -409,17 +446,32 @@ function subLine(it){
     it.so?esc(md(it.so)):(seen?esc(seen):'')
   ].filter(Boolean).join(' · ');
 }
+// the year as the listing writes it — the archive's own reading (engine flagsHtml), first part only
+function yearPart(it){
+  var h=P[it.__a].flagsHtml(it), m=/^<span(?: class="([a-z]+)")?>([\s\S]*?)<\/span>/.exec(h);
+  return m?'<span class="yr'+(m[1]?' '+m[1]:'')+'">'+m[2]+'</span>':'';
+}
+// what is happening to the listing: new today, a lower price, a sale on record, gone from the list
+function statusFl(it){
+  var d=DATA[it.__a], o=[];
+  if(it.so) o.push('<span class="sold">Sold record</span>');
+  if(it.n && !(d && d.__allnew)) o.push('<span class="nw">New</span>');
+  if(it.w && it.w>it.k) o.push('<span class="dr">Price drop</span>');
+  if(it.x) o.push('<span>Delisted</span>');
+  return o.join('');
+}
 function card(it,o){
   o=o||{}; var a=it.__a, A=ARCH[a], p=P[a], k=it.__k, on=isSaved(it);
-  var ph=p.photosOf(it), ch=o.change?savedChange(it):null;
+  var ph=p.photosOf(it), ch=o.change?savedChange(it):null, st=statusFl(it);
   return '<article class="card'+(it.x?' gone':'')+(it.so?' rec':'')+'" data-a="'+a+'" data-k="'+k+'">'+
     '<div class="ph" data-open="'+k+'">'+imgTag(a,ph[0],600,{eager:o.eager})+'</div>'+
-    '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="저장 · '+esc(clip(it.t,40))+'"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4.2-5.5 4.2z"/></svg></i></button>'+
+    '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="Save · '+esc(clip(it.t,40))+'"><i>'+HEART+'</i></button>'+
     '<div class="cap">'+
-      '<div class="fl">'+(o.tag?'<span class="at">'+(A.short==='CCP'?'CCP':'HL')+'</span>':'')+p.flagsHtml(it)+'</div>'+
+      '<div class="vd">'+(o.tag?'<span class="at">'+esc(A.name)+'</span>':'')+yearPart(it)+'</div>'+
       '<h3 class="t"><a href="/?archive='+a+'&amp;item='+k+'" data-open="'+k+'">'+esc(it.t)+'</a></h3>'+
       p.priceHtml(it,false)+
-      (ch?'<div class="chg">'+(ch.gone?'목록에서 사라짐':'저장 뒤 내림 '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
+      (st?'<div class="fl">'+st+'</div>':'')+
+      (ch?'<div class="chg">'+(ch.gone?'Delisted since saved':'Lower since saved '+esc(money(ch.was,ch.u))+' → '+esc(money(ch.cur,ch.u)))+'</div>':'')+
       '<div class="sub">'+subLine(it)+'</div>'+
     '</div></article>';
 }
@@ -440,90 +492,106 @@ function row(it,i,o){
       pr+
     '</span>'+
     pr+
-    '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="저장 · '+esc(clip(it.t,40))+'"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4.2-5.5 4.2z"/></svg></i></button>'+
+    '<button type="button" class="sv'+(on?' on':'')+'" data-save="'+k+'" aria-pressed="'+on+'" aria-label="Save · '+esc(clip(it.t,40))+'"><i>'+HEART+'</i></button>'+
   '</article>';
 }
 function skel(n){ var h=''; for(var i=0;i<n;i++) h+='<div class="card sk"><div class="ph"></div><div class="cap"><i></i><i></i><i></i></div></div>'; return h }
 function errBox(a){
-  return '<div class="err" role="alert"><p class="err-t">'+esc(ARCH[a].name)+' · 불러오지 못함</p>'+
-    '<p class="err-a"><button type="button" class="btn" data-retry="'+a+'">다시 시도</button></p></div>';
+  return '<div class="err" role="alert"><p class="err-t">'+esc(ARCH[a].name)+' · Could not load</p>'+
+    '<p class="err-a"><button type="button" class="btn" data-retry="'+a+'">Retry</button></p></div>';
 }
 function toast(t){ var el=$('toast'); if(!el) return; el.textContent=t; el.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(function(){ el.classList.remove('on') },1800) }
 
 /* ---------------------------------------------------------------- home */
-// the front page: the two archives, each with three of the day's photographs, then what came in today
+// the front page: the two archives as two photographs, what came in today, what got cheaper
 function homeShell(){
   return '<h1 class="sr" id="vh" tabindex="-1">Archive Index</h1>'+
-  '<nav class="rooms" id="hero" aria-label="두 아카이브">'+AS.map(function(a){ var A=ARCH[a];
+  '<nav class="rooms" id="hero" aria-label="Archive rooms">'+AS.map(function(a){ var A=ARCH[a];
     return '<a class="room r-'+a+'" href="/?archive='+a+'">'+
-      '<span class="room-ph" id="rp-'+a+'" aria-hidden="true"><span class="ph"></span><span class="ph"></span><span class="ph"></span></span>'+
-      '<span class="room-t"><span class="room-name">'+esc(A.name)+'</span><span class="room-go" aria-hidden="true">→</span></span>'+
-      '<span class="room-meta"><span class="room-sp">'+esc(A.span)+'</span><span class="room-stat" id="st-'+a+'"><span class="sk w60"></span></span></span>'+
+      '<span class="room-ph" id="rp-'+a+'" aria-hidden="true"></span>'+
+      '<span class="room-t">'+
+        '<span class="room-name">'+esc(A.name)+'</span>'+
+        '<span class="room-meta"><span class="room-sp">'+esc(A.span)+'</span><span class="room-stat" id="st-'+a+'"><span class="sk w60"></span></span></span>'+
+        '<span class="room-go">Enter</span>'+
+      '</span>'+
     '</a>' }).join('')+
   '</nav>'+
-  '<section class="today" id="today" aria-labelledby="todayH">'+
-    '<div class="sh"><h2 id="todayH">오늘 들어온 매물</h2><span class="sh-d" id="todayD"></span><span class="sh-l" id="todayL"></span></div>'+
+  '<section class="sec today" id="today" aria-labelledby="todayH">'+
+    '<div class="sec-h"><h2 id="todayH">New today</h2><span class="sec-d" id="todayD"></span></div>'+
+    '<div class="tabs" id="todayT" role="group" aria-label="New today, by archive"></div>'+
     '<div class="grid" id="tgrid">'+skel(8)+'</div>'+
+    '<div class="sec-more"><a class="btn" href="/?view=new">View all new</a></div>'+
   '</section>'+
-  '<section class="drops" id="drops" aria-labelledby="dropsH" hidden>'+
-    '<div class="sh"><h2 id="dropsH">가격 내림</h2><span class="sh-l" id="dropsL"></span></div>'+
-    '<div class="ix" id="dlist"></div>'+
+  '<section class="sec drops" id="drops" aria-labelledby="dropsH" hidden>'+
+    '<div class="sec-h"><h2 id="dropsH">Price drops</h2></div>'+
+    '<div class="grid" id="dlist"></div>'+
+    '<div class="sec-more" id="dropsL"></div>'+
   '</section>';
 }
 // the same photographs all day: a fixed shuffle of the listings with a photo, seeded by the day
 function seeded(str){ var h=2166136261>>>0; for(var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0 }
   return function(){ h^=h<<13; h>>>=0; h^=h>>>17; h^=h<<5; h>>>=0; return h/4294967296 } }
-function picks(a,d,n){
-  var pool=d.items.filter(function(it){ return it.i && !it.x && !it.so && !it.__bad });
-  var dated=pool.filter(function(it){ return it.__c==='A' || it.__c==='B' });
-  if(dated.length>=n*3) pool=dated;
-  var r=seeded(a+(d.today||'')), out=[], seenU={};
-  pool=pool.slice(); for(var i=pool.length-1;i>0;i--){ var j=Math.floor(r()*(i+1)), t=pool[i]; pool[i]=pool[j]; pool[j]=t }
-  for(var k=0;k<pool.length && out.length<n;k++){ var u=pool[k].i; if(seenU[u]) continue; seenU[u]=1; out.push(pool[k]) }
-  return out;
+// a photograph that can stand behind a name: one from a host that serves it large, of a piece the archive can date
+function bigOk(u){ return /media-assets\.grailed\.com|cdn\.shopify\.com|i\.ebayimg\.com|auc-pctr\.c\.yimg\.jp|images\.vestiairecollective\.com|static\.mercdn\.net|img\.fril\.jp/.test(u||'') }
+function heroPick(a,d,salt){
+  var live=d.items.filter(function(it){ return it.i && !it.x && !it.so && !it.__bad });
+  var pool=live.filter(function(it){ return bigOk(it.i) }); if(pool.length<8) pool=live;
+  var dated=pool.filter(function(it){ return it.__c==='A' || it.__c==='B' }); if(dated.length>=8) pool=dated;
+  if(!pool.length) return null;
+  var r=seeded(a+(salt||'')+(d.today||'')); return pool[Math.floor(r()*pool.length)];
 }
-function roomPhotos(a){
-  var el=$('rp-'+a), d=DATA[a]; if(!el || !d) return;
-  el.innerHTML=picks(a,d,3).map(function(it){ return '<span class="ph">'+imgTag(a,it.i,600)+'</span>' }).join('');
-  bindImgs(el);
+function heroImg(a,it,eager){ return it?imgTag(a,it.i,1200,{eager:eager}):'' }
+function roomPhoto(a,id,salt){
+  var el=$(id), d=DATA[a]; if(!el || !d || el.__done) return; el.__done=1;
+  el.innerHTML=heroImg(a,heroPick(a,d,salt),true); bindImgs(el);
 }
 function shortTime(iso){ var s=kst(iso); return s.replace(/(\d{1,2})월\s*(\d{1,2})일\s*/,'$1/$2 ') }
 function statHtml(a,d){
-  var s=[['매물',won(d.__cards)]];
-  if(!d.__allnew) s.push(['신규',won(d.__fresh)]);
-  if(d.built) s.push(['갱신',esc(shortTime(d.built))]);
+  var s=[['Items',won(d.__cards)]];
+  if(!d.__allnew) s.push(['New',won(d.__fresh)]);
+  if(d.built) s.push(['Updated',esc(shortTime(d.built))]);
   return s.map(function(x){ return '<span><em>'+x[0]+'</em><b>'+x[1]+'</b></span>' }).join('');
 }
 function homeUpdate(gen){
   AS.forEach(function(a){
     var paint=function(){ if(gen!==GEN) return; var d=DATA[a]; seen(a);
       var st=$('st-'+a); if(st) st.innerHTML=statHtml(a,d);
-      roomPhotos(a); todayUpdate(gen); dropsUpdate(gen); drawerMeta();
+      roomPhoto(a,'rp-'+a,'home'); todayUpdate(gen); dropsUpdate(gen); drawerMeta();
     };
     if(DATA[a]) paint();
-    else load(a).then(paint,function(){ if(gen!==GEN) return; var st=$('st-'+a); if(st) st.innerHTML='<span class="bad">불러오지 못함</span>'; todayUpdate(gen); dropsUpdate(gen) });
+    else load(a).then(paint,function(){ if(gen!==GEN) return; var st=$('st-'+a); if(st) st.innerHTML='<span class="bad">Could not load</span>'; todayUpdate(gen); dropsUpdate(gen) });
   });
 }
 var TILELIST=[];
 function cmpNew(a,b){ return (b.n||0)-(a.n||0) || (a.f===b.f?0:(b.f||'')>(a.f||'')?1:-1) || b.k-a.k }
-var TODAYLIST=[];
+function newOf(a){ var d=DATA[a]; if(!d) return []; return d.items.filter(function(it){ return it.n && !it.x && !it.so && !it.__bad && !d.__allnew }).sort(cmpNew) }
+var TODAYLIST=[], TODAYTAB='all', TODAYPER={};
 function todayUpdate(gen){
   if(gen!==GEN) return;
   var g=$('tgrid'); if(!g) return;
   var done=AS.every(function(a){ return DATA[a] || FAIL[a] }); if(!done) return;
-  var per={}, total={};
-  AS.forEach(function(a){ var d=DATA[a]; if(!d){ per[a]=[]; total[a]=0; return }
-    var l=d.items.filter(function(it){ return it.n && !it.x && !it.so && !d.__allnew });
-    l.sort(cmpNew); per[a]=l; total[a]=l.length });
-  var want={hl:10, ccp:6}, out=[];
-  AS.forEach(function(a){ out=out.concat(per[a].slice(0,want[a])) });
-  AS.forEach(function(a){ if(out.length<16) out=out.concat(per[a].slice(want[a], want[a]+(16-out.length))) });
-  TODAYLIST=out;
+  var per={}, total=0;
+  AS.forEach(function(a){ per[a]=newOf(a); total+=per[a].length });
+  TODAYPER=per;
   var d0=DATA.hl||DATA.ccp;
-  $('todayD').textContent=d0?kday(d0.today):'';
-  $('todayL').innerHTML=AS.map(function(a){ return DATA[a]&&total[a]?'<a href="/?archive='+a+'&amp;show=new">'+esc(ARCH[a].name)+' <b>'+won(total[a])+'</b></a>':'' }).join('');
-  var bad=AS.filter(function(a){ return FAIL[a] }).map(function(a){ return esc(ARCH[a].name)+' 불러오지 못함' });
-  if(!out.length){ g.classList.add('none'); g.innerHTML='<p class="none-t">'+(bad.length?bad.join(' · '):'오늘 들어온 매물 없음')+'</p>'; return }
+  $('todayD').textContent=d0?enDay(d0.today):'';
+  if(TODAYTAB!=='all' && !(per[TODAYTAB]||[]).length) TODAYTAB='all';
+  var tabs=[['all','All',total]].concat(AS.map(function(a){ return [a,ARCH[a].name,per[a].length] }));
+  $('todayT').innerHTML=total?tabs.filter(function(t){ return t[0]==='all' || t[2] }).map(function(t){
+    return '<button type="button" class="tab" data-tt="'+t[0]+'" aria-pressed="'+(t[0]===TODAYTAB)+'">'+esc(t[1])+'<sup>'+won(t[2])+'</sup></button>' }).join(''):'';
+  todayPaint();
+}
+function todayPaint(){
+  var g=$('tgrid'); if(!g) return;
+  var per=TODAYPER, out=[];
+  if(TODAYTAB==='all'){
+    var want={hl:10, ccp:6};
+    AS.forEach(function(a){ out=out.concat((per[a]||[]).slice(0,want[a])) });
+    AS.forEach(function(a){ if(out.length<16) out=out.concat((per[a]||[]).slice(want[a], want[a]+(16-out.length))) });
+  } else out=(per[TODAYTAB]||[]).slice(0,16);
+  TODAYLIST=out;
+  var bad=AS.filter(function(a){ return FAIL[a] }).map(function(a){ return esc(ARCH[a].name)+' · Could not load' });
+  if(!out.length){ g.classList.add('none'); g.innerHTML='<p class="none-t">'+(bad.length?bad.join(' · '):'Nothing new today')+'</p>'; return }
   g.classList.remove('none');
   g.innerHTML=out.map(function(it,i){ return card(it,{tag:true, eager:i<4}) }).join('');
   bindImgs(g);
@@ -544,73 +612,155 @@ function dropsUpdate(gen){
   if(shown.length<8) shown=all;
   shown.sort(function(x,y){ var dx=cutDay(x), dy=cutDay(y); if(dx!==dy) return dy>dx?1:-1; return (y.w-y.k)/y.w-(x.w-x.k)/x.w });
   DROPLIST=shown.slice(0,8);
-  $('dropsL').innerHTML=AS.map(function(a){ return per[a]?'<a href="/?archive='+a+'&amp;show=drop&amp;sort=drop">'+esc(ARCH[a].name)+' <b>'+won(per[a])+'</b></a>':'' }).join('');
-  l.innerHTML=DROPLIST.map(function(it,i){ return row(it,i,{tag:true}) }).join('');
+  $('dropsL').innerHTML=AS.map(function(a){ return per[a]?'<a class="btn" href="/?archive='+a+'&amp;show=drop&amp;sort=drop">'+esc(ARCH[a].name)+'<sup>'+won(per[a])+'</sup></a>':'' }).join('');
+  l.innerHTML=DROPLIST.map(function(it){ return card(it,{tag:true}) }).join('');
   bindImgs(l); box.hidden=false;
 }
 function drawerMeta(){
   var dm={hl:$('dmHl'), ccp:$('dmCcp')};
-  AS.forEach(function(a){ if(dm[a] && DATA[a]) dm[a].textContent='매물 '+won(DATA[a].__cards) });
+  AS.forEach(function(a){ if(dm[a] && DATA[a]) dm[a].textContent=won(DATA[a].__cards) });
+  var nw=$('dmNew'); if(nw && AS.every(function(a){ return DATA[a] })){ var n=0; AS.forEach(function(a){ n+=DATA[a].__fresh||0 }); nw.textContent=n?won(n):'' }
+}
+
+/* ---------------------------------------------------------------- new in: what came in today, in both archives */
+var NEWLIST=[], NEWTAB='all', NEWSHOWN=0;
+function newShell(){
+  return '<section class="vh"><h1 id="vh" tabindex="-1">New in</h1><p class="rm" id="nwm"><span class="sk w40"></span></p></section>'+
+    '<div class="vtabs"><div class="tabs" id="newT" role="group" aria-label="Archive"></div></div>'+
+    '<div class="body"><div class="res">'+
+      '<div class="grid" id="ngrid">'+skel(8)+'</div>'+
+      '<div class="more" id="nmore" hidden><button type="button" class="btn" id="nmoreBtn">Load more</button></div>'+
+    '</div></div>';
+}
+function newUpdate(gen){
+  var pending=AS.filter(function(a){ return !DATA[a] && !FAIL[a] });
+  pending.forEach(function(a){ load(a).then(function(){ if(gen===GEN) newUpdate(gen) },function(){ if(gen===GEN) newUpdate(gen) }) });
+  if(pending.length) return;
+  AS.forEach(seen);
+  var per={}, total=0;
+  AS.forEach(function(a){ per[a]=newOf(a); total+=per[a].length });
+  if(NEWTAB!=='all' && !(per[NEWTAB]||[]).length) NEWTAB='all';
+  NEWLIST=NEWTAB==='all' ? AS.reduce(function(o,a){ return o.concat(per[a]) },[]).sort(cmpNew) : per[NEWTAB].slice();
+  var d0=DATA.hl||DATA.ccp;
+  $('nwm').innerHTML=(d0?'<span>'+esc(enDay(d0.today))+'</span>':'')+'<span><b>'+won(total)+'</b> Items</span>'+
+    AS.filter(function(a){ return FAIL[a] }).map(function(a){ return '<span class="bad">'+esc(ARCH[a].name)+' · Could not load</span>' }).join('');
+  $('newT').innerHTML=[['all','All',total]].concat(AS.map(function(a){ return [a,ARCH[a].name,per[a].length] })).map(function(t){
+    return '<button type="button" class="tab" data-nt="'+t[0]+'" aria-pressed="'+(t[0]===NEWTAB)+'"'+(t[2]||t[0]==='all'?'':' disabled')+'>'+esc(t[1])+'<sup>'+won(t[2])+'</sup></button>' }).join('');
+  newPaint(true);
+}
+function newPaint(reset){
+  var g=$('ngrid'); if(!g) return;
+  if(reset){ g.innerHTML=''; NEWSHOWN=0 }
+  var mo=$('nmore');
+  if(!NEWLIST.length){ g.classList.add('none'); g.innerHTML='<p class="none-t">Nothing new today</p>'; mo.hidden=true; return }
+  g.classList.remove('none');
+  var end=Math.min(NEWLIST.length,NEWSHOWN+BATCH), h='';
+  for(var i=NEWSHOWN;i<end;i++) h+=card(NEWLIST[i],{tag:true, eager:reset && i<4});
+  g.insertAdjacentHTML('beforeend',h); NEWSHOWN=end; bindImgs(g);
+  mo.hidden=NEWSHOWN>=NEWLIST.length;
+  $('nmoreBtn').textContent='Load more · '+won(NEWLIST.length-NEWSHOWN);
+}
+
+/* ---------------------------------------------------------------- brands, A to Z */
+// the archives this site reads; a brand joins the list when an index of its own is published here
+function brandList(){ return AS.map(function(a){ return {name:ARCH[a].name, href:'/?archive='+a, a:a} }) }
+function brandsShell(){
+  var L=brandList().slice().sort(function(x,y){ return x.name.localeCompare(y.name,'en') }), by={};
+  L.forEach(function(b){ var c=b.name.charAt(0).toUpperCase(); (by[c]=by[c]||[]).push(b) });
+  var letters=keys(by).sort();
+  return '<section class="rh az-h"><span class="rh-ph two" id="azph" aria-hidden="true"></span>'+
+      '<div class="rh-in"><h1 class="rt" id="vh" tabindex="-1">Brands</h1><p class="rm"><span class="st"><b>'+won(L.length)+'</b> <em>Brands</em></span></p></div></section>'+
+    '<nav class="az-l" aria-label="A to Z">'+letters.map(function(c){ return '<a href="#az-'+c+'" data-az="'+c+'">'+c+'</a>' }).join('')+'</nav>'+
+    '<div class="az">'+letters.map(function(c){
+      return '<section class="az-s" id="az-'+c+'" aria-labelledby="azh-'+c+'"><h2 id="azh-'+c+'">'+c+'</h2><ul>'+
+        by[c].map(function(b){ return '<li><a href="'+b.href+'"><span class="az-n">'+esc(b.name)+'</span><span class="n" id="azn-'+b.a+'"></span></a></li>' }).join('')+
+      '</ul></section>' }).join('')+'</div>';
+}
+function brandsUpdate(gen){
+  AS.forEach(function(a){
+    var fill=function(){ if(gen!==GEN) return; var n=$('azn-'+a); if(n && DATA[a]) n.textContent=won(DATA[a].__cards); azPhoto() };
+    if(DATA[a]) fill(); else load(a).then(fill,function(){});
+  });
+}
+function azPhoto(){
+  var el=$('azph'); if(!el || el.__done || !AS.every(function(a){ return DATA[a] })) return; el.__done=1;
+  el.innerHTML=AS.map(function(a){ return '<span>'+heroImg(a,heroPick(a,DATA[a],'brands'),true)+'</span>' }).join(''); bindImgs(el);
 }
 
 /* ---------------------------------------------------------------- room */
+var ICO={
+  sliders:'<svg class="ico-f" viewBox="0 0 12 10" width="12" height="10" aria-hidden="true"><path d="M6.6 7.6H1m10.2 0H8.4M2.9 2.4H1m10.2 0H4.7M4.7 1v2.8M8.4 9V6.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  mag:'<svg class="ico-s" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" stroke="currentColor" stroke-width="1.4" fill="none"/><path d="M15.2 15.2 20.5 20.5" stroke="currentColor" stroke-width="1.4"/></svg>',
+  x:'<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" stroke="currentColor" stroke-width="1.3"/></svg>',
+  xs:'<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg>'
+};
 function roomShell(a){
-  var A=ARCH[a], p=P[a];
+  var A=ARCH[a];
+  var grp=function(g,inner,id){ return '<details class="fg"'+(id?' id="'+id+'"':'')+' open><summary>'+esc(grpEn(a,g))+'</summary>'+inner+'</details>' };
   return '<section class="rh">'+
-      '<h1 class="rt" id="vh" tabindex="-1">'+esc(A.name)+'</h1>'+
-      '<p class="rm" id="rm"><span class="sk w60"></span></p>'+
-      '<p class="since" id="since" hidden></p>'+
+      '<span class="rh-ph" id="rhp" aria-hidden="true"></span>'+
+      '<div class="rh-in">'+
+        '<h1 class="rt" id="vh" tabindex="-1">'+esc(A.name)+'</h1>'+
+        '<p class="rm" id="rm"><span class="sk w60"></span></p>'+
+        '<p class="since" id="since" hidden></p>'+
+      '</div>'+
     '</section>'+
+    '<div class="cats" id="cats" role="group" aria-label="Category"></div>'+
     '<div class="bar" id="bar"><div class="bar-in">'+
-      '<div class="cats" id="cats" role="group" aria-label="분류"></div>'+
-      '<div class="tools">'+
-        '<div class="qf"><svg class="ico-s" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" stroke="currentColor" stroke-width="1.4" fill="none"/><path d="M15.2 15.2 20.5 20.5" stroke="currentColor" stroke-width="1.4"/></svg>'+
-          '<input id="rq" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder="'+esc(A.ph)+'" aria-label="'+esc(A.name)+' 안에서 찾기">'+
-          '<button type="button" class="qx" id="rqx" aria-label="검색어 지우기" hidden><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>'+
-        '<button type="button" class="ftog" id="ftog" aria-expanded="false" aria-controls="side">필터<span class="n" id="fn"></span></button>'+
-        '<div class="lay" id="lay" role="group" aria-label="보기">'+
-          '<button type="button" data-lay="grid" aria-pressed="'+(LAY!=='list')+'" aria-label="사진으로 보기"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 1.5h4.5v4.5H1.5zM8 1.5h4.5v4.5H8zM1.5 8h4.5v4.5H1.5zM8 8h4.5v4.5H8z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><span class="lbl">사진</span></button>'+
-          '<button type="button" data-lay="list" aria-pressed="'+(LAY==='list')+'" aria-label="목록으로 보기"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h11M1.5 7h11M1.5 11h11" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><span class="lbl">목록</span></button>'+
-        '</div>'+
-        '<a class="skip2" href="#listH">목록으로 건너뛰기</a>'+
-        '<div class="selw"><select id="sort" aria-label="정렬">'+SORT.map(function(s){ return '<option value="'+s[0]+'"'+(s[0]==='rel'?' hidden':'')+'>'+s[1]+'</option>' }).join('')+'</select></div>'+
+      '<button type="button" class="ftog" id="ftog" aria-expanded="false" aria-controls="side">'+ICO.sliders+'<span class="ft-l">Filter and sort</span><span class="n" id="fn"></span></button>'+
+      '<div class="qf">'+ICO.mag+
+        '<input id="rq" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search" placeholder="'+esc(A.ph)+'" aria-label="Search '+esc(A.name)+'">'+
+        '<button type="button" class="qx" id="rqx" aria-label="Clear search" hidden>'+ICO.xs+'</button></div>'+
+      '<div class="lay" id="lay" role="group" aria-label="View">'+
+        '<button type="button" data-lay="grid" aria-pressed="'+(LAY!=='list')+'">Grid</button>'+
+        '<button type="button" data-lay="list" aria-pressed="'+(LAY==='list')+'">List</button>'+
       '</div>'+
+      '<a class="skip2" href="#listH">Skip to listings</a>'+
+      '<div class="selw"><select id="sort" aria-label="Sort">'+SORT.map(function(s){ return '<option value="'+s[0]+'"'+(s[0]==='rel'?' hidden':'')+'>'+s[1]+'</option>' }).join('')+'</select></div>'+
+      '<div class="count" id="count" role="status" aria-live="polite"></div>'+
     '</div></div>'+
-    '<div class="body">'+
-      '<aside class="side" id="side" aria-label="필터">'+
-        '<div class="side-top"><h2>필터</h2><button type="button" class="ico" id="sideX" aria-label="필터 닫기"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" stroke="currentColor" stroke-width="1.3"/></svg></button></div>'+
-        '<div class="side-in">'+
-          '<section class="fg"><h3>'+esc(p.GRP.y)+'</h3><div class="yrs" id="f-y"></div></section>'+
-          '<section class="fg"><h3>'+esc(p.GRP.cert)+'</h3><ul class="ops" id="f-cert"></ul></section>'+
-          '<section class="fg" id="g-motif"><h3>'+esc(p.GRP.motif)+'</h3><ul class="ops cols" id="f-motif"></ul></section>'+
-          '<section class="fg"><h3>'+esc(p.GRP.src)+'</h3><ul class="ops" id="f-src"></ul></section>'+
-          '<section class="fg"><h3>'+esc(p.GRP.price)+'</h3><ul class="ops" id="f-price"></ul></section>'+
-          '<section class="fg" id="g-mark"><h3>'+esc(p.GRP.mark)+'</h3><ul class="ops" id="f-mark"></ul></section>'+
-          '<section class="fg"><h3>상태</h3><ul class="ops" id="f-flag"></ul></section>'+
-          '<section class="fg"><h3><label for="fsize">사이즈</label></h3><input class="fsize" id="fsize" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="48 · M · 32"></section>'+
-        '</div>'+
-        '<div class="side-foot"><button type="button" class="btn ghost" id="clearAll">모두 해제</button><button type="button" class="btn solid" id="sideDone">보기</button></div>'+
-      '</aside>'+
-      '<div class="res">'+
-        '<div class="applied" id="applied" hidden></div>'+
-        '<h2 class="sr" id="listH" tabindex="-1">목록</h2><div class="count" id="count" role="status" aria-live="polite"></div>'+
-        '<div class="'+(LAY==='list'?'ix':'grid')+'" id="grid">'+skel(12)+'</div>'+
-        '<div class="more" id="more" hidden><button type="button" class="btn" id="moreBtn">더 보기</button></div>'+
-        '<div class="empty" id="empty" hidden></div>'+
-        '<section class="seek" id="seek" aria-label="다른 곳에서 찾기" hidden></section>'+
-
+    '<div class="side-shade" id="sideShade" hidden></div>'+
+    '<aside class="side" id="side" aria-label="Filter and sort">'+
+      '<div class="side-top"><div class="side-tt"><h2>Filter and sort</h2><p class="side-n" id="sideN"></p></div>'+
+        '<button type="button" class="ico" id="sideX" aria-label="Close filters">'+ICO.x+'</button></div>'+
+      '<div class="side-in">'+
+        '<details class="fg fg-sort" open><summary>Sort by</summary><ul class="ops" id="f-sort"></ul></details>'+
+        grp('y','<div class="yrs" id="f-y"></div>')+
+        grp('cert','<ul class="ops" id="f-cert"></ul>')+
+        grp('motif','<ul class="ops cols" id="f-motif"></ul>','g-motif')+
+        grp('src','<ul class="ops" id="f-src"></ul>')+
+        grp('price','<ul class="ops" id="f-price"></ul>')+
+        grp('mark','<ul class="ops" id="f-mark"></ul>','g-mark')+
+        grp('flag','<ul class="ops" id="f-flag"></ul>')+
+        '<details class="fg" open><summary>Size</summary><label class="sr" for="fsize">Size</label><input class="fsize" id="fsize" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="48 · M · 32"></details>'+
       '</div>'+
-    '</div>';
+      '<div class="side-foot"><button type="button" class="lnk" id="clearAll">Clear</button><button type="button" class="btn solid" id="sideDone">Show results</button></div>'+
+    '</aside>'+
+    '<div class="body"><div class="res">'+
+      '<div class="applied" id="applied" hidden></div>'+
+      '<h2 class="sr" id="listH" tabindex="-1">Listings</h2>'+
+      '<p class="crng" id="crng" hidden></p>'+
+      '<div class="'+(LAY==='list'?'ix':'grid')+'" id="grid">'+skel(12)+'</div>'+
+      '<div class="more" id="more" hidden><button type="button" class="btn" id="moreBtn">Load more</button></div>'+
+      '<div class="empty" id="empty" hidden></div>'+
+      '<section class="seek" id="seek" aria-label="Find elsewhere" hidden></section>'+
+    '</div></div>';
 }
+// the filter drawer comes in from the left on every screen, over a shade that closes it
 function sideOpen(on){
-  var s=$('side'), t=$('ftog'); if(!s||!t) return;
+  var s=$('side'), t=$('ftog'), sh=$('sideShade'); if(!s||!t) return;
   s.classList.toggle('open',on); t.setAttribute('aria-expanded',String(on));
-  root.classList.toggle('lock-side',on && !WIDE.matches);
-  if(on && !WIDE.matches){ var x=$('sideX'); if(x) x.focus() }
-  else if(!on && doc.activeElement && s.contains(doc.activeElement)) t.focus();
+  root.classList.toggle('lock-side',on);
+  if(sh){
+    if(on){ sh.hidden=false; nextFrame(function(){ if(s.classList.contains('open')) sh.classList.add('on') }) }
+    else { sh.classList.remove('on'); setTimeout(function(){ if(!sh.classList.contains('on')) sh.hidden=true },REDUCED.matches?0:320) }
+  }
+  if(on){ var x=$('sideX'); if(x) x.focus({preventScroll:true}) }
+  else if(doc.activeElement && s.contains(doc.activeElement)) t.focus({preventScroll:true});
 }
 var qTimer=null, zTimer=null, SORTB4=null, IO=null;
 var LAY=lsGet('aix.layout')==='list'?'list':'grid';
+function setSort(v){ if(SORTV.indexOf(v)<0 || v===ST.sort) return; var st=cloneST(); st.sort=v; SORTB4=null; ST=st; writeUrl(false); roomUpdate(GEN) }
 function bindRoom(){
   $('cats').addEventListener('click',function(e){
     var b=e.target.closest('[data-cat]'); if(!b) return;
@@ -618,21 +768,23 @@ function bindRoom(){
     go({view:'room', a:ST.a, F:F, sort:ST.sort, item:null});
   });
   $('side').addEventListener('click',function(e){
+    var so=e.target.closest('[data-sort]'); if(so){ setSort(so.getAttribute('data-sort')); return }
     var b=e.target.closest('[data-g]'); if(!b) return;
     var g=b.getAttribute('data-g'), v=b.getAttribute('data-v'), F=copyF(ST.F);
     if(F[g][v]) delete F[g][v]; else F[g][v]=1;
     FOCUS={g:g, v:v};
     go({view:'room', a:ST.a, F:F, sort:ST.sort, item:null});
   });
+  $('sideShade').addEventListener('click',function(){ sideOpen(false) });
   $('applied').addEventListener('click',offClick);
   $('empty').addEventListener('click',offClick);
   $('since').addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return;
     var F=copyF(ST.F); if(F.flag.since) delete F.flag.since; else F.flag.since=1; go({view:'room', a:ST.a, F:F, sort:ST.sort, item:null}) });
   $('ftog').addEventListener('click',function(){ sideOpen(!$('side').classList.contains('open')) });
   $('sideX').addEventListener('click',function(){ sideOpen(false) });
-  $('sideDone').addEventListener('click',function(){ sideOpen(false); var g=$('grid'); if(g && g.getBoundingClientRect().top<0) window.scrollTo(0, window.scrollY+g.getBoundingClientRect().top-120) });
+  $('sideDone').addEventListener('click',function(){ sideOpen(false); var g=$('grid'); if(g && g.getBoundingClientRect().top<0) window.scrollTo(0, window.scrollY+g.getBoundingClientRect().top-160) });
   $('clearAll').addEventListener('click',function(){ clearAll() });
-  $('sort').addEventListener('change',function(){ var st=cloneST(); st.sort=this.value; SORTB4=null; ST=st; writeUrl(false); roomUpdate(GEN) });
+  $('sort').addEventListener('change',function(){ setSort(this.value) });
   var q=$('rq');
   q.addEventListener('input',function(){
     var v=q.value.replace(/\s+/g,' ').trim().toLowerCase().slice(0,80);
@@ -756,7 +908,7 @@ function flagOpts(a){
   if(d.__gone) o.push('gone');
   return o;
 }
-function flagLbl(a,f){ return P[a].FLAGLBL[f]||f }
+function flagLbl(a,f){ return f==='since'?'Since last visit':(FLAGEN[f]||f) }
 function roomUpdate(gen){
   var a=ST.a;
   if(!DATA[a]){
@@ -769,16 +921,17 @@ function roomUpdate(gen){
   LASTQ=filterKey();
   var d=DATA[a], p=P[a], F=ST.F;
   compute(a); title();
+  roomPhoto(a,'rhp','room');
   // head
-  var tn=d.__tn, cl=p.CERT, st=function(l,n){ return '<span class="st"><em>'+l+'</em><b>'+(typeof n==='number'?won(n):n)+'</b></span>' };
-  var bits=['<span class="st">'+esc(ARCH[a].span)+'</span>', st('매물',d.__cards), st(esc(cl.A),tn.A)];
-  if(!d.__allnew) bits.push(st('신규',d.__fresh));
-  if(d.__sold) bits.push(st('판매 기록',d.__sold));
-  bits.push(st('갱신',esc(shortTime(d.built))));
+  var tn=d.__tn, st=function(l,n){ return '<span class="st"><em>'+l+'</em><b>'+(typeof n==='number'?won(n):n)+'</b></span>' };
+  var bits=['<span class="st">'+esc(ARCH[a].span)+'</span>', st('Items',d.__cards), st('Dated',tn.A)];
+  if(!d.__allnew) bits.push(st('New',d.__fresh));
+  if(d.__sold) bits.push(st('Sold records',d.__sold));
+  bits.push(st('Updated',esc(shortTime(d.built))));
   $('rm').innerHTML=bits.join('');
   var sn=$('since');
   if(SINCE[a]){ var ns=0; d.items.forEach(function(it){ if(!it.x && !it.so && it.f && it.f>SINCE[a]) ns++ });
-    sn.hidden=!ns; sn.innerHTML=ns?'<button type="button" aria-pressed="'+!!F.flag.since+'">지난 방문 '+esc(md(SINCE[a]))+' 이후 <b>'+won(ns)+'</b></button>':'' }
+    sn.hidden=!ns; sn.innerHTML=ns?'<button type="button" aria-pressed="'+!!F.flag.since+'">Since your visit '+esc(md(SINCE[a]))+'<b>'+won(ns)+'</b></button>':'' }
   else sn.hidden=true;
   // search box and sort mirror the state (a link or the back button may have changed them)
   var q=$('rq'); if(q && doc.activeElement!==q && q.value.trim().toLowerCase()!==F.q) q.value=F.q;
@@ -792,9 +945,9 @@ function roomUpdate(gen){
 function cats(a){
   var d=DATA[a], F=ST.F, fc=FACET.cat, sel=keys(F.cat), tot=0;
   d.__order.cat.forEach(function(c){ tot+=fc[c]||0 });
-  var h='<button type="button" class="cat" data-cat="" aria-pressed="'+(!sel.length)+'">전체<span class="n">'+won(tot)+'</span></button>';
+  var h='<button type="button" class="cat" data-cat="" aria-pressed="'+(!sel.length)+'">All<span class="n">'+won(tot)+'</span></button>';
   d.__order.cat.forEach(function(c){ var on=!!F.cat[c], n=fc[c]||0;
-    h+='<button type="button" class="cat'+(n||on?'':' z')+'" data-cat="'+esc(c)+'" aria-pressed="'+on+'">'+esc(c)+'<span class="n">'+won(n)+'</span></button>' });
+    h+='<button type="button" class="cat'+(n||on?'':' z')+'" data-cat="'+esc(c)+'" aria-pressed="'+on+'">'+esc(catEn(c))+'<span class="n">'+won(n)+'</span></button>' });
   var el=$('cats'), ind=el.querySelector('.ind'), was=ind?{x:ind.__x, w:ind.__w}:null;
   el.innerHTML=h+'<span class="ind" aria-hidden="true"></span>'; el.classList.add('has-ind');
   placeInd(was);
@@ -815,46 +968,54 @@ function opt(g,v,label,n,on,cls){
 function facets(a){
   var d=DATA[a], p=P[a], F=ST.F, fc=FACET, O=d.__order;
   var act=doc.activeElement, keep=FOCUS || (act && act.getAttribute && act.hasAttribute('data-g') ? {g:act.getAttribute('data-g'), v:act.getAttribute('data-v')} : null);
+  var keepSort=act && act.getAttribute && act.hasAttribute('data-sort');
   FOCUS=null;
+  // sort, as a list of choices (the phone has no room for the select)
+  $('f-sort').innerHTML=SORT.filter(function(s){ return s[0]!=='rel' || F.q }).map(function(s){ var on=ST.sort===s[0];
+    return '<li><button type="button" class="op rad'+(on?' on':'')+'" data-sort="'+s[0]+'" aria-pressed="'+on+'"><span class="op-l">'+esc(s[1])+'</span></button></li>' }).join('');
   // years: one button per year, and one for none
   var yh='';
   O.y.forEach(function(y){ var on=!!F.y[y], n=fc.y[y]||0;
-    yh+='<button type="button" class="yb'+(on?' on':'')+(!n&&!on?' z':'')+(y==='none'?' none':'')+'" data-g="y" data-v="'+y+'" aria-pressed="'+on+'" aria-label="'+(y==='none'?'연도 미표기':y+'년')+' '+won(n)+'건">'+
-      '<span>'+(y==='none'?'미표기':y)+'</span><i>'+won(n)+'</i></button>' });
+    yh+='<button type="button" class="yb'+(on?' on':'')+(!n&&!on?' z':'')+(y==='none'?' none':'')+'" data-g="y" data-v="'+y+'" aria-pressed="'+on+'" aria-label="'+(y==='none'?'No year':y)+', '+won(n)+'">'+
+      '<span>'+(y==='none'?'No year':y)+'</span><i>'+won(n)+'</i></button>' });
   var fy=$('f-y'); fy.innerHTML=yh;
   var ymax=0; O.y.forEach(function(y){ if(y!=='none') ymax=Math.max(ymax,fc.y[y]||0) });
   var ybs=fy.querySelectorAll('.yb'); for(var yi=0;yi<ybs.length;yi++){ var yv=ybs[yi].getAttribute('data-v'), yn=fc.y[yv]||0;
     ybs[yi].style.setProperty('--v', ymax && yv!=='none' ? (yn/ymax).toFixed(3) : '0') }
   $('f-cert').innerHTML=O.cert.map(function(c){ return opt('cert',c,esc(p.CERT[c]),fc.cert[c]||0,!!F.cert[c]) }).join('');
   $('g-motif').hidden=!O.motif.length;
-  $('f-motif').innerHTML=O.motif.map(function(m){ return opt('motif',m,esc(p.motifLbl(m)),fc.motif[m]||0,!!F.motif[m]) }).join('');
+  $('f-motif').innerHTML=O.motif.map(function(m){ return opt('motif',m,esc(motifEn(a,m)),fc.motif[m]||0,!!F.motif[m]) }).join('');
   $('f-src').innerHTML=O.src.map(function(s){ var seen=SRCSEEN[a][s], stop=seen && d.today && seen<d.today;
     return opt('src',s,esc(s)+(stop?'<small>'+esc(md(seen))+' 이후 수집 안 됨</small>':''),fc.src[s]||0,!!F.src[s]) }).join('');
-  $('f-price').innerHTML=O.price.map(function(b){ return opt('price',b,esc(b),fc.price[b]||0,!!F.price[b]) }).join('');
+  $('f-price').innerHTML=O.price.map(function(b){ return opt('price',b,esc(priceEn(a,b)),fc.price[b]||0,!!F.price[b]) }).join('');
   $('g-mark').hidden=!O.mark.length;
-  $('f-mark').innerHTML=O.mark.map(function(m){ return opt('mark',m,esc(p.MARKLBL[m]||m),fc.mark[m]||0,!!F.mark[m]) }).join('');
-  $('f-flag').innerHTML=flagOpts(a).map(function(f){ return opt('flag',f,esc(f==='since'?'지난 방문 '+md(SINCE[a])+' 이후':flagLbl(a,f)),FLAGN[f]||0,!!F.flag[f]) }).join('');
-  var sd=$('sideDone'); if(sd) sd.textContent=won(VIEW.length)+'건 보기';
+  $('f-mark').innerHTML=O.mark.map(function(m){ return opt('mark',m,esc(markEn(a,m)),fc.mark[m]||0,!!F.mark[m]) }).join('');
+  $('f-flag').innerHTML=flagOpts(a).map(function(f){ return opt('flag',f,esc(f==='since'?'Since last visit '+md(SINCE[a]):flagLbl(a,f)),FLAGN[f]||0,!!F.flag[f]) }).join('');
+  var sd=$('sideDone'); if(sd) sd.textContent='Show '+won(VIEW.length)+' '+(VIEW.length===1?'item':'items');
+  var sn=$('sideN'); if(sn) sn.textContent=won(VIEW.length)+' '+(VIEW.length===1?'item':'items');
   if(keep){ var b=$('side').querySelector('[data-g="'+keep.g+'"][data-v="'+cssv(keep.v)+'"]'); if(b) b.focus({preventScroll:true}) }
+  else if(keepSort){ var sb=$('side').querySelector('[data-sort="'+cssv(ST.sort)+'"]'); if(sb) sb.focus({preventScroll:true}) }
 }
 function cssv(v){ return String(v).replace(/["\\]/g,'\\$&') }
 function tokLabel(a,g,v){
   var p=P[a];
   if(g==='cert') return p.CERT[v]||v;
-  if(g==='motif') return p.motifLbl(v);
-  if(g==='mark') return p.MARKLBL[v]||v;
-  if(g==='flag') return v==='since'?'지난 방문 이후':flagLbl(a,v);
-  if(g==='y') return v==='none'?'연도 미표기':v;
+  if(g==='motif') return motifEn(a,v);
+  if(g==='mark') return markEn(a,v);
+  if(g==='flag') return flagLbl(a,v);
+  if(g==='price') return priceEn(a,v);
+  if(g==='cat') return catEn(v);
+  if(g==='y') return v==='none'?'No year':v;
   return v;
 }
 function tokens(a){
   var F=ST.F, t=[];
   ORG.concat(['flag']).forEach(function(g){
     var vs=keys(F[g]);
-    if(g==='y'){ pack(vs).forEach(function(r){ t.push({g:'y', v:r, l:r==='none'?'연도 미표기':r.replace('-','–')}) }); return }
+    if(g==='y'){ pack(vs).forEach(function(r){ t.push({g:'y', v:r, l:r==='none'?'No year':r.replace('-','–')}) }); return }
     vs.forEach(function(v){ t.push({g:g, v:v, l:tokLabel(a,g,v)}) });
   });
-  if(F.size) t.push({g:'size', v:'', l:'사이즈 '+F.size});
+  if(F.size) t.push({g:'size', v:'', l:'Size '+F.size});
   if(F.q) t.push({g:'q', v:'', l:'“'+F.q+'”'});
   return t;
 }
@@ -862,20 +1023,21 @@ function offY(F,r){ var m=/^(\d{4})-(\d{4})$/.exec(r); if(m){ for(var y=+m[1];y<
 function applied(a){
   var t=tokens(a), el=$('applied');
   el.hidden=!t.length;
-  el.innerHTML=t.map(function(x){ return '<button type="button" class="tok" data-off="'+x.g+'" data-v="'+esc(x.v)+'" aria-label="'+esc(x.l)+' 빼기">'+esc(x.l)+'<span aria-hidden="true">×</span></button>' }).join('')+
-    (t.length>1?'<button type="button" class="tok all" data-off="all">모두 해제</button>':'');
+  el.innerHTML=t.map(function(x){ return '<button type="button" class="tok" data-off="'+x.g+'" data-v="'+esc(x.v)+'" aria-label="Remove '+esc(x.l)+'">'+esc(x.l)+'<span aria-hidden="true">'+ICO.xs+'</span></button>' }).join('')+
+    (t.length>1?'<button type="button" class="tok all" data-off="all">Clear all</button>':'');
 }
 function medianOf(a){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){ return x-y }), m=s.length>>1; return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2) }
 function countLine(a){
   var F=ST.F, n=VIEW.length, narrowed=tokens(a).length>0;
-  var h='<span class="cn"><b>'+won(n)+'</b>건</span>';
+  $('count').innerHTML='<span class="cn"><b>'+won(n)+'</b> '+(n===1?'Item':'Items')+'</span>';
+  var r='';
   if(narrowed && n>1){
     var ks=VIEW.filter(function(it){ return !it.x && !it.so && it.k>0 }).map(function(it){ return it.k });
     if(ks.length>1){ var lo=Math.min.apply(null,ks), hi=Math.max.apply(null,ks);
-      h+='<span class="rng">가격 ₩'+won(lo)+'–₩'+won(hi)+' · 중앙값 ₩'+won(medianOf(ks))+'</span>' }
+      r+='<span>Price ₩'+won(lo)+'–'+won(hi)+'</span><span>Median ₩'+won(medianOf(ks))+'</span>' }
   }
-  if(F.q){ var p=P[a], QT=p.getQT(); if(!QT.length) h+='<span class="rng">브랜드 이름은 검색어로 쓰지 않음</span>' }
-  $('count').innerHTML=h;
+  if(F.q){ var p=P[a], QT=p.getQT(); if(!QT.length) r+='<span>Brand names are not search terms</span>' }
+  var el=$('crng'); el.innerHTML=r; el.hidden=!r;
 }
 function paint(reset){
   var g=$('grid'); if(!g) return;
@@ -886,7 +1048,7 @@ function paint(reset){
   g.insertAdjacentHTML('beforeend',h); SHOWN=end;
   bindImgs(g);
   var mo=$('more'); mo.hidden=SHOWN>=VIEW.length;
-  $('moreBtn').textContent='더 보기 · '+won(VIEW.length-SHOWN)+'건';
+  $('moreBtn').textContent='Load more · '+won(VIEW.length-SHOWN);
 }
 function countWithout(a,g,v){
   var save=ST.F, F=copyF(save);
@@ -899,9 +1061,9 @@ function empty(a){
   var e=$('empty'), g=$('grid');
   if(VIEW.length){ e.hidden=true; e.innerHTML=''; return }
   g.innerHTML='';
-  var t=tokens(a), h='<p class="empty-t">결과 없음</p>';
+  var t=tokens(a), h='<p class="empty-t">No results</p>';
   if(t.length){ h+='<div class="empty-o">'+t.map(function(x){ var n=countWithout(a,x.g,x.v);
-      return '<button type="button" class="btn ghost" data-off="'+x.g+'" data-v="'+esc(x.v)+'">'+esc(x.l)+' 빼기 · '+won(n)+'건</button>' }).join('')+'</div>' }
+      return '<button type="button" class="btn ghost" data-off="'+x.g+'" data-v="'+esc(x.v)+'">Remove '+esc(x.l)+'<sup>'+won(n)+'</sup></button>' }).join('')+'</div>' }
   e.innerHTML=h; e.hidden=false;
 }
 function seek(a){
@@ -910,19 +1072,19 @@ function seek(a){
   var parts=p.seekParts(), shown=[], rows=[];
   parts.forEach(function(x){ if(x.row){ if(rows.indexOf(x.row)>=0) return; rows.push(x.row) }
     var w=x.typed || (x.row?(p.word(x.row,'ko')||p.word(x.row,'en')||p.word(x.row,'ja')):x.raw); if(w && shown.indexOf(w)<0) shown.push(w) });
-  var h='<h2 class="seek-h">다른 곳에서 찾기</h2><p class="seek-q">'+esc(ARCH[a].name)+(shown.length?' · '+esc(shown.join(' · ')):' 전체')+'</p><div class="seek-m">';
-  var mk=null;
+  var h='<h2 class="seek-h">Find elsewhere</h2><p class="seek-q">'+esc(ARCH[a].name)+(shown.length?' · '+esc(shown.join(' · ')):'')+'</p><div class="seek-m">';
+  var mk=null, REG={'일본':'Japan','한국':'Korea','해외':'Elsewhere'}, NOTE={'낙찰가':'Sold prices','구매대행':'Proxy','판매 완료':'Sold','유럽':'EU','미국':'US'};
   p.SEEK.forEach(function(sk){
-    if(sk[0]!==mk){ if(mk) h+='</div></div>'; mk=sk[0]; h+='<div class="mkt"><span class="mkt-n">'+esc(mk)+'</span><div class="mkt-l">' }
+    if(sk[0]!==mk){ if(mk) h+='</div></div>'; mk=sk[0]; h+='<div class="mkt"><span class="mkt-n">'+esc(REG[mk]||mk)+'</span><div class="mkt-l">' }
     var qq=p.seekQuery(parts,sk[2]), url=okUrl(sk[3](qq,qq===p.SEEKBRAND[sk[2]]));
-    if(url) h+='<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(sk[1])+(sk[4]?'<small>'+esc(sk[4])+'</small>':'')+'</a>';
+    if(url) h+='<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(sk[1])+(sk[4]?'<small>'+esc(NOTE[sk[4]]||sk[4])+'</small>':'')+'</a>';
   });
   el.innerHTML=h+'</div></div></div>'; el.hidden=false;
 }
 
 /* ---------------------------------------------------------------- saved */
 function savedShell(){
-  return '<section class="vh"><h1 id="vh" tabindex="-1">저장</h1><p class="rm" id="svm"><span class="sk w40"></span></p></section>'+
+  return '<section class="vh"><h1 id="vh" tabindex="-1">Saved</h1><p class="rm" id="svm"><span class="sk w40"></span></p></section>'+
     '<div id="svb">'+AS.map(function(a){ return '<section class="sg" id="sg-'+a+'" aria-labelledby="sgh-'+a+'"><h2 class="sg-h" id="sgh-'+a+'">'+esc(ARCH[a].name)+'<span class="n" id="sgn-'+a+'"></span></h2>'+
       '<div class="grid" id="sgg-'+a+'"></div><ul class="miss" id="sgm-'+a+'" hidden></ul></section>' }).join('')+'</div>';
 }
@@ -946,18 +1108,18 @@ function savedUpdate(gen){
     bindImgs(g);
     miss.hidden=!lost.length;
     miss.innerHTML=lost.map(function(u){ var ok=okUrl(u), host=''; try{ host=new URL(u).host.replace(/^www\./,'') }catch(e){}
-      return '<li><span class="miss-l">오늘 목록에 없음</span><span class="miss-u">'+esc(host)+'</span>'+
-        (ok?'<a href="'+esc(ok)+'" target="_blank" rel="noopener noreferrer">판매 페이지</a>':'')+
-        '<button type="button" class="lnk" data-unsave="'+esc(a)+'" data-u="'+esc(u)+'">저장 해제</button></li>' }).join('');
+      return '<li><span class="miss-l">Not in today’s list</span><span class="miss-u">'+esc(host)+'</span>'+
+        (ok?'<a href="'+esc(ok)+'" target="_blank" rel="noopener noreferrer">Listing</a>':'')+
+        '<button type="button" class="lnk" data-unsave="'+esc(a)+'" data-u="'+esc(u)+'">Remove</button></li>' }).join('');
   });
-  $('svm').innerHTML=total?'<b>'+won(total)+'</b>건 · 이 브라우저에 저장':'저장한 매물 없음 · 사진 오른쪽 위 책갈피로 저장';
+  $('svm').innerHTML=total?'<span><b>'+won(total)+'</b> '+(total===1?'Item':'Items')+'</span><span>Kept in this browser</span>':'<span>Nothing saved</span>';
   var box=$('svb'); if(box && !box.__b){ box.__b=1; box.addEventListener('click',function(e){ var b=e.target.closest('[data-unsave]'); if(!b) return;
     var a=b.getAttribute('data-unsave'), u=b.getAttribute('data-u'), m=readSaved(a); if(!own.call(ARCH,a)) return; delete m[u]; lsSet(ARCH[a].sk,JSON.stringify(m)); SAVED[a]=m; savedUi(); refresh() }) }
 }
 
 /* ---------------------------------------------------------------- about */
 function aboutShell(){
-  return '<section class="vh"><h1 id="vh" tabindex="-1">소개</h1><p class="rm">Helmut Lang 1986–2005 · Carol Christian Poell · 중고 매물 색인</p></section>'+
+  return '<section class="vh"><h1 id="vh" tabindex="-1">About</h1><p class="rm"><span>Helmut Lang 1986–2005</span><span>Carol Christian Poell</span><span>중고 매물 색인</span></p></section>'+
   '<div class="ab">'+
     AS.map(function(a){ return '<section class="ab-s" aria-labelledby="abh-'+a+'"><h2 id="abh-'+a+'">'+esc(ARCH[a].name)+'</h2><dl class="kv" id="ab-'+a+'"><dt>범위</dt><dd>'+esc(ARCH[a].sub)+'</dd><dt>갱신</dt><dd>'+esc(ARCH[a].upd)+'</dd></dl></section>' }).join('')+
     '<section class="ab-s" aria-labelledby="abh-r"><h2 id="abh-r">읽는 법</h2><dl class="kv">'+
@@ -1001,6 +1163,7 @@ function listFor(it){
   if(ST.view==='room' && ST.a===it.__a) return VIEW;
   if(ST.view==='saved') return SAVEDLIST;
   if(ST.view==='home'){ if(TODAYLIST.indexOf(it)>=0) return TODAYLIST; if(DROPLIST.indexOf(it)>=0) return DROPLIST; if(TILELIST.indexOf(it)>=0) return TILELIST; return TODAYLIST }
+  if(ST.view==='new') return NEWLIST;
   return null;
 }
 function findItem(k){
@@ -1142,41 +1305,43 @@ function detailHtml(it,lo){
   var offers='';
   if(it.g>1 && Array.isArray(it.v)){
     var ks=it.v.map(function(v){ return v.k }), lo=Math.min.apply(null,ks), hi=Math.max.apply(null,ks), spread=hi>lo;
-    offers='<section class="offers"><h3 class="lbl">같은 상품명 '+won(it.g)+'곳</h3>'+it.v.slice().sort(function(x,y){ return x.k-y.k }).map(function(v){
+    offers='<details class="acc offers" open><summary>Same title · '+won(it.g)+' sources</summary><div class="acc-b">'+it.v.slice().sort(function(x,y){ return x.k-y.k }).map(function(v){
       var u=okUrl(v.l); if(!u) return '';
       return '<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer"'+(spread&&v.k===lo?' class="lo"':'')+'>'+
         '<span class="o-ph">'+(v.i?imgTag(a,v.i,160):'')+'</span>'+
-        '<span class="o-w">'+esc(v.r)+(v.z?' · '+esc(v.z):'')+(spread&&v.k===lo?'<em>최저가</em>':'')+'</span>'+
+        '<span class="o-w">'+esc(v.r)+(v.z?' · '+esc(v.z):'')+(spread&&v.k===lo?'<em>Lowest</em>':'')+'</span>'+
         '<b>₩'+won(v.k)+(v.u&&v.p>0?'<i>'+esc((p.SYM[v.u]||'')+Number(v.p).toLocaleString('en-US'))+'</i>':'')+'</b></a>' }).join('')+
-      (spread?'<p class="gap">가격 차 ₩'+won(hi-lo)+'</p>':'')+'</section>';
+      (spread?'<p class="gap">Spread ₩'+won(hi-lo)+'</p>':'')+'</div></details>';
   }
-  var tags=it.__m.map(function(k){ return '<button type="button" class="tag" data-motif="'+esc(k)+'">'+esc(p.motifLbl(k))+'</button>' }).join('');
-  var thumbs=ph.length>1?'<div class="ths" role="group" aria-label="사진">'+ph.map(function(u,i){ return '<button type="button" data-ph="'+i+'" aria-label="사진 '+(i+1)+'"'+(i===0?' aria-current="true"':'')+'>'+imgTag(a,u,160)+'</button>' }).join('')+'</div>':'';
+  var hist=p.histHtml(it), comps=p.compsHtml(it), st=statusFl(it);
+  var tags=it.__m.map(function(k){ return '<button type="button" class="tag" data-motif="'+esc(k)+'">'+esc(motifEn(a,k))+'</button>' }).join('');
+  var thumbs=ph.length>1?'<div class="ths" role="group" aria-label="Photographs">'+ph.map(function(u,i){ return '<button type="button" data-ph="'+i+'" aria-label="Photograph '+(i+1)+'"'+(i===0?' aria-current="true"':'')+'>'+imgTag(a,u,160)+'</button>' }).join('')+'</div>':'';
   return '<div class="dv-top">'+
       '<span class="dv-tag"><span class="nm-l">'+esc(A.name)+'</span><span class="nm-s">'+esc(A.short)+'</span></span>'+
       '<span class="dv-pos" aria-live="polite">'+pos+'</span>'+
       '<span class="dv-nav">'+
-        '<button type="button" class="ico" data-step="-1" aria-label="이전 매물"'+(DV.idx>0?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5 8 12l7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
-        '<button type="button" class="ico" data-step="1" aria-label="다음 매물"'+(DV.list&&DV.idx>=0&&DV.idx<DV.list.length-1?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
-        '<button type="button" class="dv-x" data-close>닫기<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.3"/></svg></button>'+
+        '<button type="button" class="ico" data-step="-1" aria-label="Previous listing"'+(DV.idx>0?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5 8 12l7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
+        '<button type="button" class="ico" data-step="1" aria-label="Next listing"'+(DV.list&&DV.idx>=0&&DV.idx<DV.list.length-1?'':' disabled')+'><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>'+
+        '<button type="button" class="dv-x" data-close><span>Close</span><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.3"/></svg></button>'+
       '</span></div>'+
     '<div class="dv-body">'+
       '<div class="dv-pic'+(ph.length?'':' dead')+'">'+(ph.length?'<div class="dv-main">'+mainImg(a,ph[0],it.t,lo)+(ph.length>1?'<span class="pn" id="dvPn">1 / '+ph.length+'</span>':'')+'</div>':'')+thumbs+'</div>'+
       '<div class="dv-info">'+
-        '<div class="fl">'+p.flagsHtml(it)+'</div>'+
+        '<div class="vd"><span class="at">'+esc(A.name)+'</span>'+yearPart(it)+'</div>'+
         '<h2 id="dvT">'+esc(it.t)+'</h2>'+
         p.priceHtml(it,true)+
-        '<div class="acts">'+
-          (link?'<a class="btn solid" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">'+(it.so?'기록 보기':'판매 페이지')+'<span class="arr" aria-hidden="true">↗</span></a>':'')+
-          (bee?'<a class="btn" href="'+esc(bee)+'" target="_blank" rel="noopener noreferrer">구매대행<span class="arr" aria-hidden="true">↗</span></a>':'')+
-          '<button type="button" class="btn'+(on?' on':'')+'" data-save="'+it.__k+'" aria-pressed="'+on+'">'+(on?'저장 해제':'저장')+'</button>'+
-          '<button type="button" class="btn ghost" data-copy>링크 복사</button>'+
-        '</div>'+
-        '<dl class="kv">'+kv+'</dl>'+
-        p.histHtml(it)+p.compsHtml(it)+
+        (st?'<div class="fl">'+st+'</div>':'')+
         (tags?'<div class="tags">'+tags+'</div>':'')+
+        '<div class="acts">'+
+          (link?'<a class="btn solid" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">'+(it.so?'View record':'View listing')+'<span class="arr" aria-hidden="true">↗</span></a>':'')+
+          (bee?'<a class="btn" href="'+esc(bee)+'" target="_blank" rel="noopener noreferrer">Buy via proxy<span class="arr" aria-hidden="true">↗</span></a>':'')+
+          '<button type="button" class="btn sv-b'+(on?' on':'')+'" data-save="'+it.__k+'" aria-pressed="'+on+'">'+saveBtnInner(on)+'</button>'+
+          '<button type="button" class="btn" data-copy>Copy link</button>'+
+        '</div>'+
+        '<details class="acc" open><summary>Details</summary><div class="acc-b"><dl class="kv">'+kv+'</dl></div></details>'+
+        (hist?'<details class="acc"><summary>Price history</summary><div class="acc-b">'+hist+'</div></details>':'')+
+        (comps?'<details class="acc"><summary>Sold records</summary><div class="acc-b">'+comps+'</div></details>':'')+
         offers+
-
       '</div>'+
     '</div>';
 }
@@ -1195,7 +1360,7 @@ function showPhoto(i){
 }
 function copyLink(){
   var url=location.origin+hrefOf(ST);
-  var ok=function(){ toast('링크 복사함') }, no=function(){ toast('복사할 수 없음 · 주소창의 주소 사용') };
+  var ok=function(){ toast('Link copied') }, no=function(){ toast('Could not copy · use the address bar') };
   if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(ok,function(){ fallbackCopy(url)?ok():no() });
   else fallbackCopy(url)?ok():no();
 }
@@ -1230,7 +1395,7 @@ function openSearch(){
   AS.forEach(function(a){ if(!DATA[a] && !FAIL[a]) load(a).then(runSearch,function(){ runSearch() }) });
   runSearch();
   var hint=hints();
-  $('sHint').innerHTML='<span class="lbl">예</span>'+hint.map(function(h){ return '<button type="button" data-hint="'+esc(h)+'">'+esc(h)+'</button>' }).join('');
+  $('sHint').innerHTML='<span class="lbl">Try</span>'+hint.map(function(h){ return '<button type="button" data-hint="'+esc(h)+'">'+esc(h)+'</button>' }).join('');
 }
 function hints(){
   var h=['bondage','1998','ボンデージ','드립'];
@@ -1254,7 +1419,7 @@ function runSearch(){
   AS.forEach(function(a){
     var A=ARCH[a], d=DATA[a];
     h+='<section class="sr-g"><h3>'+esc(A.name)+'<span class="n" id="srn-'+a+'"></span></h3>';
-    if(!d){ h+='<p class="sr-m">'+(FAIL[a]?'불러오지 못함':'불러오는 중')+'</p></section>'; return }
+    if(!d){ h+='<p class="sr-m">'+(FAIL[a]?'Could not load':'Loading')+'</p></section>'; return }
     var p=P[a], F=blankF(); F.q=q; p.setF(F); p.setQuery(q);
     var QT=p.getQT(), res=[];
     if(QT.length) d.items.forEach(function(it){ if(it.x || it.so || it.__bad) return; var sc=p.score(it); if(sc>0) res.push([sc,it]) });
@@ -1262,14 +1427,14 @@ function runSearch(){
     // hand the room back its own query
     if(ST.view==='room' && ST.a===a){ p.setF(ST.F); p.setQuery(ST.F.q) }
     var st={view:'room', a:a, F:F, sort:'rel', item:null};
-    if(!res.length){ h+='<p class="sr-m">'+(QT.length?'결과 없음':'브랜드 이름은 검색어로 쓰지 않음')+'</p></section>'; return }
+    if(!res.length){ h+='<p class="sr-m">'+(QT.length?'No results':'Brand names are not search terms')+'</p></section>'; return }
     h=h.replace('<span class="n" id="srn-'+a+'"></span>','<span class="n">'+won(res.length)+'</span>');
     h+='<ul>'+res.slice(0,5).map(function(r){ var it=r[1], ph=p.photosOf(it)[0]; SRES.push({it:it, q:q});
       var st2={view:'room', a:a, F:F, sort:'rel', item:it.__k};
       return '<li><a class="sr-i" href="'+esc(hrefOf(st2))+'" data-sri="'+(SRES.length-1)+'">'+
         '<span class="sr-ph">'+imgTag(a,ph,160)+'</span><span class="sr-t">'+esc(it.t)+'</span>'+
         '<span class="sr-p">₩'+won(it.k)+(it.__e?' · '+esc(it.__e):'')+' · '+esc(it.r)+'</span></a></li>' }).join('')+'</ul>'+
-      '<a class="sr-all" href="'+esc(hrefOf(st))+'">'+won(res.length)+'건 모두 보기<span class="arr" aria-hidden="true">→</span></a></section>';
+      '<a class="sr-all" href="'+esc(hrefOf(st))+'">View all '+won(res.length)+'<span class="arr" aria-hidden="true">→</span></a></section>';
   });
   out.innerHTML=h; bindImgs(out);
 }
@@ -1291,9 +1456,9 @@ $('search').addEventListener('click',function(e){
 });
 
 /* ---------------------------------------------------------------- drawer (phone menu) */
-function openDrawer(){ var d=$('drawer'); d.hidden=false; root.classList.add('lock'); requestAnimationFrame(function(){ d.classList.add('open') }); $('menuBtn').setAttribute('aria-expanded','true'); var x=d.querySelector('[data-close]'); if(x) x.focus() }
+function openDrawer(){ var d=$('drawer'); d.hidden=false; root.classList.add('lock'); nextFrame(function(){ d.classList.add('open') }); $('menuBtn').setAttribute('aria-expanded','true'); var x=d.querySelector('[data-close]'); if(x) x.focus() }
 function closeDrawer(silent){ var d=$('drawer'); if(d.hidden) return; d.classList.remove('open'); root.classList.remove('lock'); $('menuBtn').setAttribute('aria-expanded','false');
-  var fin=function(){ if(!d.classList.contains('open')) d.hidden=true }; if(REDUCED.matches) fin(); else setTimeout(fin,200); if(!silent) $('menuBtn').focus() }
+  var fin=function(){ if(!d.classList.contains('open')) d.hidden=true }; if(REDUCED.matches) fin(); else setTimeout(fin,360); if(!silent) $('menuBtn').focus() }
 $('menuBtn').addEventListener('click',openDrawer);
 $('drawer').addEventListener('click',function(e){ if(e.target.closest('[data-close]')) closeDrawer() });
 
@@ -1305,6 +1470,13 @@ doc.addEventListener('click',function(e){
   if(sk){ var tid=(sk.getAttribute('href')||'').replace(/^#/,''), tg=$(tid); if(tg){ e.preventDefault(); if(!tg.hasAttribute('tabindex')) tg.setAttribute('tabindex','-1'); tg.focus({preventScroll:true});
       var y=tg.getBoundingClientRect().top+window.scrollY-(tid==='listH'?140:0); window.scrollTo(0,Math.max(0,y)) } return }
   var re=e.target.closest('[data-retry]'); if(re){ var ra=re.getAttribute('data-retry'); delete FAIL[ra]; refresh(); if(ST.view==='home') homeUpdate(GEN); return }
+  var tt=e.target.closest('[data-tt]'); if(tt){ TODAYTAB=tt.getAttribute('data-tt'); var tb=$('todayT').querySelectorAll('[data-tt]');
+    for(var ti=0;ti<tb.length;ti++) tb[ti].setAttribute('aria-pressed',String(tb[ti]===tt)); todayPaint(); return }
+  var nt=e.target.closest('[data-nt]'); if(nt){ if(nt.disabled) return; NEWTAB=nt.getAttribute('data-nt'); newUpdate(GEN); return }
+  if(e.target.closest('#nmoreBtn')){ newPaint(false); return }
+  var az=e.target.closest('[data-az]'); if(az){ var at=$('az-'+az.getAttribute('data-az')); if(at){ e.preventDefault();
+    var h2=at.querySelector('h2'); if(h2){ h2.setAttribute('tabindex','-1'); h2.focus({preventScroll:true}) }
+    window.scrollTo(0,Math.max(0,at.getBoundingClientRect().top+window.scrollY-($('top').offsetHeight+24))) } return }
   var sv=e.target.closest('.card [data-save], .row [data-save]'); if(sv){ var it=itemOfEl(sv); if(it) toggleSave(it); return }
   var sri=e.target.closest('[data-sri]');
   if(sri && !mod){ e.preventDefault(); var r=SRES[+sri.getAttribute('data-sri')]; closeSearch(true); if(!r) return;
@@ -1325,7 +1497,7 @@ doc.addEventListener('keydown',function(e){
     if(!$('search').hidden){ e.preventDefault(); closeSearch(); return }
     if(DV.it){ e.preventDefault(); closeByUser(); return }
     if(!$('drawer').hidden){ e.preventDefault(); closeDrawer(); return }
-    var sd=$('side'); if(sd && sd.classList.contains('open') && !WIDE.matches){ e.preventDefault(); sideOpen(false); return }
+    var sd=$('side'); if(sd && sd.classList.contains('open')){ e.preventDefault(); sideOpen(false); return }
     return;
   }
   if(e.metaKey||e.ctrlKey||e.altKey) return;
@@ -1336,7 +1508,7 @@ doc.addEventListener('keydown',function(e){
 });
 // keep Tab inside whatever sits on top (inert does this where it is supported; this covers the rest)
 function trap(e){
-  var box=DV.it?$('dv'):!$('search').hidden?$('search').querySelector('.so-in'):!$('drawer').hidden?$('drawer'):null;
+  var sd=$('side'), box=DV.it?$('dv'):!$('search').hidden?$('search').querySelector('.so-in'):!$('drawer').hidden?$('drawer'):(sd && sd.classList.contains('open'))?sd:null;
   if(!box) return;
   var f=[].slice.call(box.querySelectorAll('a[href],button:not([disabled]),input,select,[tabindex]:not([tabindex="-1"])')).filter(function(x){ return x.offsetParent!==null || x===doc.activeElement });
   if(!f.length) return;
@@ -1345,7 +1517,6 @@ function trap(e){
   if(e.shiftKey && doc.activeElement===first){ e.preventDefault(); last.focus() }
   else if(!e.shiftKey && doc.activeElement===last){ e.preventDefault(); first.focus() }
 }
-if(WIDE.addEventListener) WIDE.addEventListener('change',function(){ root.classList.remove('lock-side'); var s=$('side'); if(s && WIDE.matches) s.classList.remove('open') });
 
 /* ---------------------------------------------------------------- the index's photograph under the pointer */
 var FINE=mq('(hover:hover) and (pointer:fine)');
@@ -1386,15 +1557,11 @@ $('ov').addEventListener('pointermove',function(e){ if(e.pointerType!=='mouse') 
 $('ov').addEventListener('pointerleave',function(){ lensOff() },{passive:true});
 $('ov').addEventListener('pointerout',function(e){ var m=e.target.closest && e.target.closest('.dv-main'); if(m && !m.contains(e.relatedTarget)) lensOff() },{passive:true});
 
-/* ---------------------------------------------------------------- the head steps aside while reading down */
-var LASTY=window.scrollY||0, SCR=0;
-function topScroll(){
-  var y=window.scrollY, dy=y-LASTY; LASTY=y;
-  if(root.classList.contains('lock')) return;
-  if(dy>6 && y>220) root.classList.add('hide-top');
-  else if(dy<-6 || y<140) root.classList.remove('hide-top');
-}
+/* ---------------------------------------------------------------- the head stays; a line under it once the page has moved */
+var SCR=0;
+function topScroll(){ root.classList.toggle('scrolled', window.scrollY>4) }
 window.addEventListener('scroll',function(){ if(!SCR) SCR=requestAnimationFrame(function(){ SCR=0; topScroll(); if(PVK) pvHide() }) },{passive:true});
+topScroll();
 
 /* ---------------------------------------------------------------- start */
 // the page puts the reader back itself (keepPlace); the browser's own guess lands on the previous view's height

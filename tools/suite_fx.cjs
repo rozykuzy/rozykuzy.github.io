@@ -1,8 +1,13 @@
-// the plain design: what little moves, that nothing waits to be seen, and a budget for the type
+// v5 "maison": what little moves, that nothing waits to be seen, and the type held to its scale
 const H = require('./harness.cjs');
 let pass = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fails.push(m); console.log('  FAIL', m) } }
 const wait = (p, ms) => p.waitForTimeout(ms);
+// the type scale (px) and the tracking set (em) of v5 — README, design system
+const SCALE = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 26, 30, 32, 36, 40, 44, 48, 52];
+const TRACK = [-0.01, 0, 0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1, 0.12, 0.15, 0.3, 0.32];
+const onScale = (a) => a.every((x) => SCALE.includes(x));
+const onTrack = (a) => a.every((x) => TRACK.some((t) => Math.abs(t - x) <= 0.002));
 const csp = (p) => p.evaluate(() => window.__csp || []);
 // every text run the page draws: which families, sizes, tracking
 // (tracking is compared as a share of the size: one value per step of the scale, not per pixel)
@@ -24,18 +29,19 @@ const typeOf = (p, within) => p.evaluate((w) => {
       photos: document.querySelectorAll('.room-ph img.on').length, hidden: [...document.querySelectorAll('.card, .room')].filter((e) => +getComputedStyle(e).opacity < 1).length,
       gone: ['.wd', '.tile', '#mq', '#footBig', '#strip', '#heroD'].filter((s) => document.querySelector(s)).join(' ') }));
     ok(r.fx, 'html.fx on with motion allowed');
-    ok(r.photos === 6, 'three photographs for each archive, shown ' + r.photos);
+    ok(r.photos === 2, 'one photograph behind each archive, shown ' + r.photos);
     ok(r.hidden === 0, 'nothing waits to be seen ' + r.hidden);
     ok(r.gone === '', 'no decoration left: ' + r.gone);
     const t = await typeOf(p);
-    ok(t.fam.every((f) => /^Index (Sans|Latin)$/.test(f)), 'one family ' + t.fam.join(', '));
-    ok(t.size.length <= 5, 'few sizes on the front page ' + t.size.join(' '));
-    ok(t.track.length <= 4, 'few tracking values (em) ' + t.track.join(' '));
+    ok(t.fam.every((f) => f === 'Figtree'), 'one family ' + t.fam.join(', '));
+    ok(onScale(t.size) && t.size.length <= 9, 'front page sizes on the scale ' + t.size.join(' '));
+    ok(onTrack(t.track), 'tracking values from the set (em) ' + t.track.join(' '));
     console.log('   home type', JSON.stringify(t));
     // the room door is a link; the page change is a plain cross-fade
     await p.click('.room.r-ccp .room-name'); await wait(p, 700);
     ok(await p.evaluate(() => location.search === '?archive=ccp' && !document.documentElement.classList.contains('vt-on')), 'room change finishes');
     ok(await p.evaluate(() => getComputedStyle(document.body).backgroundColor === 'rgb(255, 255, 255)'), 'the same white page for both archives');
+    ok(await p.evaluate(() => getComputedStyle(document.getElementById('foot')).backgroundColor === 'rgb(0, 0, 0)'), 'black foot');
     ok((await csp(p)).length === 0 && p.errs.length === 0, 'home: no CSP or errors ' + JSON.stringify(await csp(p)) + p.errs.join(' | '));
     await p.context().close(); }
 
@@ -43,22 +49,22 @@ const typeOf = (p, within) => p.evaluate((w) => {
   { console.log('room'); const p = await H.page(b, { width: 1440, height: 900 });
     await p.goto(H.BASE + '/?archive=hl'); await H.ready(p); await wait(p, 900);
     const t = await typeOf(p);
-    ok(t.fam.every((f) => /^Index (Sans|Latin)$/.test(f)), 'room: one family ' + t.fam.join(', '));
-    ok(t.size.length <= 5, 'room: few sizes ' + t.size.join(' '));
-    ok(t.track.length <= 4, 'room: few tracking values (em) ' + t.track.join(' '));
+    ok(t.fam.every((f) => f === 'Figtree'), 'room: one family ' + t.fam.join(', '));
+    ok(onScale(t.size) && t.size.length <= 9, 'room: sizes on the scale ' + t.size.join(' '));
+    ok(onTrack(t.track), 'room: tracking values from the set (em) ' + t.track.join(' '));
     console.log('   room type', JSON.stringify(t));
     const ind = async () => p.evaluate(() => { const i = document.querySelector('#cats .ind'), c = document.querySelector('#cats .cat[aria-pressed="true"]');
       return { w: Math.round(i.getBoundingClientRect().width), cw: Math.round(c.getBoundingClientRect().width), x: Math.round(i.getBoundingClientRect().left), cx: Math.round(c.getBoundingClientRect().left) } });
-    let r = await ind(); ok(Math.abs(r.w - r.cw) <= 1 && Math.abs(r.x - r.cx) <= 1, 'tab line under 전체 ' + JSON.stringify(r));
+    let r = await ind(); ok(Math.abs(r.w - r.cw) <= 1 && Math.abs(r.x - r.cx) <= 1, 'tab line under ALL ' + JSON.stringify(r));
     await p.click('.cat[data-cat="데님"]'); await wait(p, 600);
-    r = await ind(); ok(Math.abs(r.w - r.cw) <= 1 && Math.abs(r.x - r.cx) <= 1, 'tab line moved under 데님 ' + JSON.stringify(r));
+    r = await ind(); ok(Math.abs(r.w - r.cw) <= 1 && Math.abs(r.x - r.cx) <= 1, 'tab line moved under DENIM ' + JSON.stringify(r));
     ok(await p.evaluate(() => document.querySelectorAll('#cats .ind').length === 1), 'one tab line');
     ok(await p.evaluate(() => [...document.querySelectorAll('#grid .card')].every((c) => +getComputedStyle(c).opacity === 1)), 'filter change: cards in place at once');
-    // the head steps aside while reading down and comes back going up
+    // the black band stays on top while reading down; the bar sits right under it
     await p.evaluate(() => window.scrollTo(0, 1600)); await wait(p, 120); await p.evaluate(() => window.scrollTo(0, 2200)); await wait(p, 500);
-    ok(await p.evaluate(() => document.documentElement.classList.contains('hide-top')), 'head steps aside going down');
-    await p.evaluate(() => window.scrollTo(0, 1900)); await wait(p, 500);
-    ok(await p.evaluate(() => !document.documentElement.classList.contains('hide-top')), 'head back going up');
+    const hb = await p.evaluate(() => ({ top: Math.round(document.getElementById('top').getBoundingClientRect().top), h: Math.round(document.getElementById('top').getBoundingClientRect().height),
+      bar: Math.round(document.getElementById('bar').getBoundingClientRect().top), bg: getComputedStyle(document.getElementById('top')).backgroundColor }));
+    ok(hb.top === 0 && Math.abs(hb.bar - (hb.h - 1)) <= 1 && hb.bg === 'rgb(0, 0, 0)', 'head stays, bar under it ' + JSON.stringify(hb));
     await p.evaluate(() => window.scrollTo(0, 0)); await wait(p, 300);
     // a second photo on hover, where there is one
     await p.hover('#grid .card:nth-child(1) .ph'); await wait(p, 500);
@@ -72,7 +78,7 @@ const typeOf = (p, within) => p.evaluate((w) => {
       vt: document.documentElement.classList.contains('vt-on'), hi: im && im.getAttribute('data-hi'), on: im && im.classList.contains('on') } });
     ok(d.open && !d.now && !d.vt && d.on && !d.hi, 'detail open, large photo in place ' + JSON.stringify(d));
     const dt = await typeOf(p, '#dv');
-    ok(dt.size.length <= 5, 'detail: few sizes ' + dt.size.join(' '));
+    ok(onScale(dt.size) && dt.size.length <= 8, 'detail: sizes on the scale ' + dt.size.join(' '));
     await p.keyboard.press('Escape'); await wait(p, 800);
     ok(await p.evaluate(() => document.getElementById('ov').hidden && !/item=/.test(location.search) && !document.documentElement.classList.contains('vt-on')), 'detail closes back into its card');
     ok((await csp(p)).length === 0 && p.errs.length === 0, 'room: no CSP or errors ' + JSON.stringify(await csp(p)) + p.errs.join(' | '));
@@ -82,7 +88,7 @@ const typeOf = (p, within) => p.evaluate((w) => {
   { console.log('phone'); const p = await H.page(b, { width: 390, height: 844 }, { mobile: true, dpr: 2 });
     await p.goto(H.BASE + '/'); await H.ready(p); await wait(p, 700);
     const t = await typeOf(p);
-    ok(t.size.length <= 5 && t.size[0] >= 12, 'phone front page: few sizes, none under 12px ' + t.size.join(' '));
+    ok(onScale(t.size) && t.size[0] >= 10, 'phone front page: sizes on the scale, none under 10px ' + t.size.join(' '));
     await p.goto(H.BASE + '/?archive=hl&source=Grailed'); await H.ready(p); await wait(p, 700);
     let opened = false;
     for (let i = 1; i <= 12 && !opened; i++) {
