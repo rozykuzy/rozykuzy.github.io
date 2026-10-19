@@ -36,7 +36,7 @@ const json = (rt, body) => rt.fulfill({ status: 200, contentType: 'application/j
     ok(await p.evaluate(() => !document.getElementById('ov').hidden && !!document.querySelector('.dv-info .offers')), 'offers with holes and a broken history: the listing still opens');
     await p.keyboard.press('Escape'); await wait(p, 400);
     // a brand's two-digit season before 1990 is not put in the 2080s
-    await p.fill('#rq', 'zqxc'); await wait(p, 500);
+    await p.fill('#rq', 'zqxc'); await p.waitForFunction(() => /ZQXC/.test((document.querySelector('#grid .card .t') || {}).textContent || ''), null, { timeout: 5000 }).catch(() => {});
     ok(await p.evaluate(() => /AW88/.test(document.querySelector('#grid .card .vd').textContent)), 'the season stays as the seller wrote it');
     await p.goto(H.BASE + '/?brand=guidi&year=2088'); await H.ready(p); await wait(p, 400);
     ok((await qs(p)) === '?brand=guidi' && await p.evaluate(() => !document.querySelector('#f-y [data-v="2088"]')), 'no year 2088 (the season has no year here) ' + await qs(p));
@@ -298,6 +298,17 @@ const json = (rt, body) => rt.fulfill({ status: 200, contentType: 'application/j
     await p.click('#ftog'); await wait(p, 500);
     ok(await p.evaluate(() => { const s = document.querySelector('#f-y .yb.none span'); return !!s && s.getClientRects().length === 1 }), 'the filter: No year on one line');
     ok(p.errs.length === 0, 'preview: no errors ' + p.errs.join(' | '));
+    await p.context().close(); }
+
+  // ---------------------------------------------------------------- 2026-10-20: an old iPhone, the "/" key named
+  { console.log('old phone, shortcut'); const p = await H.page(b, { width: 1280, height: 900 });
+    await p.goto(H.BASE + '/'); await H.ready(p);
+    // Safari before 16.4 stops at the first lookbehind in a script and the whole index is blank
+    const src = await p.evaluate(async () => [await (await fetch(document.querySelector('script[src*="engine.js"]').src)).text(), await (await fetch(document.querySelector('script[src*="app.js"]').src)).text()]);
+    ok(src.every((s) => s.length > 1000 && !/\(\?<[!=]/.test(s)), 'no lookbehind in engine.js or app.js');
+    ok(await p.evaluate(() => { const u = AIX.profiles.ccp.MOTIF.find((m) => m[0] === 'usole')[2]; return u.test('AM/2601L U-SOLE') && !u.test('CCP PU SOLE') && !u.test('menu sole') }), 'U-sole reads as before');
+    ok(await p.$eval('#searchBtn', (b) => b.getAttribute('aria-keyshortcuts') === '/' && /\(\/\)/.test(b.title)), 'the search button names its key');
+    ok(p.errs.length === 0, 'old phone: no errors ' + p.errs.join(' | '));
     await p.context().close(); }
 
   // ---------------------------------------------------------------- a phone: tabs, the brand line, the brands row

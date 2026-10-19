@@ -5,7 +5,7 @@ AIX.profiles.hl=(function(){
 'use strict';
 var D=null, TODAY=null, SINCE=null, saved={}, ALLNEW=false;
 var F={y:{},cat:{},motif:{},price:{},src:{},cert:{},mark:{},flag:{},size:'',q:''};
-/* ---- copied from helmut-lang template (r8b, as published 2026-09-28) ---- */
+/* ---- copied from helmut-lang template r8c/r8d (as published; r8d adds only a policy meta) ---- */
 var won=function(n){return Number(n||0).toLocaleString('ko-KR')};
 var SYM={USD:'$',GBP:'£',EUR:'€',JPY:'¥',KRW:'₩'};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
@@ -514,7 +514,7 @@ AIX.profiles.ccp=(function(){
 'use strict';
 var D=null, TODAY=null, SINCE=null, saved={}, ALLNEW=false;
 var F={y:{},cat:{},motif:{},price:{},src:{},cert:{},mark:{},flag:{},size:'',q:''};
-/* ---- copied from ccp template.html (repo main) ---- */
+/* ---- copied from ccp template.html (repo main, 32678a1 2026-10-20) ---- */
 var won=function(n){return Number(n||0).toLocaleString('ko-KR')};
 var SYM={USD:'$',GBP:'£',EUR:'€',JPY:'¥',KRW:'₩',CAD:'CA$',AUD:'A$',NZD:'NZ$',HKD:'HK$',SGD:'S$',CNY:'CN¥',CHF:'CHF ',
   SEK:'SEK ',DKK:'DKK ',NOK:'NOK ',PLN:'PLN ',CZK:'CZK ',HUF:'HUF ',THB:'THB ',MXN:'MX$',BRL:'R$',INR:'₹',TRY:'TRY '};
@@ -533,7 +533,8 @@ var MOTIF=[['drip','드립',/drip|ドリップ|드립/i],
  ['prosthetic','프로스테틱',/prosthetic|プロステティック|프로스테틱/i],
  ['tornado','토네이도',/tornado|トルネード|토네이도/i],
  ['diagonalzip','다이애거널 지퍼',/diagonal[\s-]*zip|ダイアゴナル|다이[애아]고?[널날]/i],
- ['usole','U솔',/(?<![a-z])u[\s-]*sole|uソール|u\s*솔/i],
+ // (no lookbehind: Safari before 16.4 cannot parse one, and the whole script would stop there)
+ ['usole','U솔',/(?:^|[^a-z])u[\s-]*sole|uソール|u\s*솔/i],
  ['paperdart','페이퍼 다트',/paper[\s-]*dart|ペーパーダート|페이퍼\s*다트/i],
  ['goodyear','굿이어',/good[\s-]*year|グッドイヤー|굿이어/i],
  ['officer','오피서',/officer|オフィサー|오피서/i],
@@ -943,7 +944,7 @@ function photosOf(it){
 }
 function histHtml(it){
   if(!it.h||it.h.length<2) return '';
-  var cur=it.u||'', sym=cur&&cur!=='KRW'?(SYM[cur]||cur+' '):'';
+  var cur=it.u||'', sym=cur&&cur!=='KRW'?(SYM[cur]||esc(cur)+' '):'';
   var nat=function(pt){ return pt.length>2 && pt[2]>0 ? pt[2] : null };
   var haveNat=it.h.every(function(pt){ return nat(pt)!=null });
   // For a listing priced in another currency, the won figure alone cannot say
